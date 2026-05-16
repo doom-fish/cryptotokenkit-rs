@@ -1,0 +1,303 @@
+use core::ffi::c_void;
+use std::ptr;
+
+use serde::{Deserialize, Serialize};
+
+use crate::error::CryptoTokenKitError;
+use crate::ffi;
+use crate::private::{decode_json, status_result};
+use crate::smart_card_atr::SmartCardProtocol;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApduResponse {
+    #[serde(default, with = "serde_bytes")]
+    pub data: Vec<u8>,
+    pub status_word: u16,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[repr(i32)]
+pub enum SmartCardPinCharset {
+    Numeric = 0,
+    Alphanumeric = 1,
+    UpperAlphanumeric = 2,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[repr(i32)]
+pub enum SmartCardPinEncoding {
+    Binary = 0,
+    Ascii = 1,
+    Bcd = 2,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[repr(i32)]
+pub enum SmartCardPinJustification {
+    Left = 0,
+    Right = 1,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SmartCardPinCompletion(pub u32);
+
+impl SmartCardPinCompletion {
+    pub const MAX_LENGTH: Self = Self(1 << 0);
+    pub const KEY: Self = Self(1 << 1);
+    pub const TIMEOUT: Self = Self(1 << 2);
+
+    #[must_use]
+    pub const fn bits(self) -> u32 {
+        self.0
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SmartCardPinConfirmation(pub u32);
+
+impl SmartCardPinConfirmation {
+    pub const NONE: Self = Self(0);
+    pub const NEW: Self = Self(1 << 0);
+    pub const CURRENT: Self = Self(1 << 1);
+
+    #[must_use]
+    pub const fn bits(self) -> u32 {
+        self.0
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SmartCardPinFormat {
+    pub charset: SmartCardPinCharset,
+    pub encoding: SmartCardPinEncoding,
+    pub min_pin_length: i64,
+    pub max_pin_length: i64,
+    pub pin_block_byte_length: i64,
+    pub pin_justification: SmartCardPinJustification,
+    pub pin_bit_offset: i64,
+    pub pin_length_bit_offset: i64,
+    pub pin_length_bit_size: i64,
+}
+
+impl Default for SmartCardPinFormat {
+    fn default() -> Self {
+        Self {
+            charset: SmartCardPinCharset::Numeric,
+            encoding: SmartCardPinEncoding::Ascii,
+            min_pin_length: 4,
+            max_pin_length: 8,
+            pin_block_byte_length: 8,
+            pin_justification: SmartCardPinJustification::Left,
+            pin_bit_offset: 0,
+            pin_length_bit_offset: 0,
+            pin_length_bit_size: 0,
+        }
+    }
+}
+
+pub struct SmartCard {
+    raw: *mut c_void,
+}
+
+impl SmartCard {
+    #[must_use]
+    pub(crate) const fn from_raw(raw: *mut c_void) -> Self {
+        Self { raw }
+    }
+
+    #[must_use]
+    pub(crate) const fn raw(&self) -> *mut c_void {
+        self.raw
+    }
+
+    pub fn slot_name(&self) -> Result<String, CryptoTokenKitError> {
+        let ptr = unsafe { ffi::smart_card::ctk_smart_card_slot_name(self.raw) };
+        if ptr.is_null() {
+            return Err(CryptoTokenKitError::FrameworkError(
+                "Swift bridge returned a null slot name".into(),
+            ));
+        }
+        Ok(crate::error::take_owned_c_string(ptr))
+    }
+
+    #[must_use]
+    pub fn valid(&self) -> bool {
+        unsafe { ffi::smart_card::ctk_smart_card_valid(self.raw) }
+    }
+
+    #[must_use]
+    pub fn allowed_protocols(&self) -> SmartCardProtocol {
+        SmartCardProtocol::from_bits(unsafe {
+            ffi::smart_card::ctk_smart_card_allowed_protocols(self.raw)
+        })
+    }
+
+    pub fn set_allowed_protocols(&self, protocols: SmartCardProtocol) {
+        unsafe { ffi::smart_card::ctk_smart_card_set_allowed_protocols(self.raw, protocols.bits()) };
+    }
+
+    #[must_use]
+    pub fn current_protocol(&self) -> SmartCardProtocol {
+        SmartCardProtocol::from_bits(unsafe {
+            ffi::smart_card::ctk_smart_card_current_protocol(self.raw)
+        })
+    }
+
+    #[must_use]
+    pub fn sensitive(&self) -> bool {
+        unsafe { ffi::smart_card::ctk_smart_card_sensitive(self.raw) }
+    }
+
+    pub fn set_sensitive(&self, sensitive: bool) {
+        unsafe { ffi::smart_card::ctk_smart_card_set_sensitive(self.raw, sensitive) };
+    }
+
+    #[must_use]
+    pub fn cla(&self) -> u8 {
+        unsafe { ffi::smart_card::ctk_smart_card_cla(self.raw) }
+    }
+
+    pub fn set_cla(&self, cla: u8) {
+        unsafe { ffi::smart_card::ctk_smart_card_set_cla(self.raw, cla) };
+    }
+
+    #[must_use]
+    pub fn use_extended_length(&self) -> bool {
+        unsafe { ffi::smart_card::ctk_smart_card_use_extended_length(self.raw) }
+    }
+
+    pub fn set_use_extended_length(&self, enabled: bool) {
+        unsafe { ffi::smart_card::ctk_smart_card_set_use_extended_length(self.raw, enabled) };
+    }
+
+    #[must_use]
+    pub fn use_command_chaining(&self) -> bool {
+        unsafe { ffi::smart_card::ctk_smart_card_use_command_chaining(self.raw) }
+    }
+
+    pub fn set_use_command_chaining(&self, enabled: bool) {
+        unsafe { ffi::smart_card::ctk_smart_card_set_use_command_chaining(self.raw, enabled) };
+    }
+
+    pub fn context(&self) -> Result<Option<String>, CryptoTokenKitError> {
+        let ptr = unsafe { ffi::smart_card::ctk_smart_card_context_json(self.raw) };
+        if ptr.is_null() {
+            return Ok(None);
+        }
+        Ok(Some(crate::error::take_owned_c_string(ptr)))
+    }
+
+    pub fn set_context(&self, json: Option<&str>) -> Result<(), CryptoTokenKitError> {
+        let mut error_ptr = ptr::null_mut();
+        let (status, _storage) = if let Some(json) = json {
+            let storage = crate::private::to_cstring(json)?;
+            let status = unsafe {
+                ffi::smart_card::ctk_smart_card_set_context_json(
+                    self.raw,
+                    storage.as_ptr(),
+                    true,
+                    &mut error_ptr,
+                )
+            };
+            (status, Some(storage))
+        } else {
+            let status = unsafe {
+                ffi::smart_card::ctk_smart_card_set_context_json(
+                    self.raw,
+                    ptr::null(),
+                    false,
+                    &mut error_ptr,
+                )
+            };
+            (status, None)
+        };
+        status_result(status, error_ptr)
+    }
+
+    pub fn begin_session(&self) -> Result<(), CryptoTokenKitError> {
+        let mut error_ptr = ptr::null_mut();
+        let status = unsafe { ffi::smart_card::ctk_smart_card_begin_session(self.raw, &mut error_ptr) };
+        status_result(status, error_ptr)
+    }
+
+    pub fn transmit_request(&self, request: &[u8]) -> Result<Vec<u8>, CryptoTokenKitError> {
+        let mut error_ptr = ptr::null_mut();
+        let mut reply_ptr = ptr::null_mut();
+        let status = unsafe {
+            ffi::smart_card::ctk_smart_card_transmit_request_json(
+                self.raw,
+                request.as_ptr(),
+                request.len(),
+                &mut reply_ptr,
+                &mut error_ptr,
+            )
+        };
+        status_result(status, error_ptr)?;
+        if reply_ptr.is_null() {
+            return Err(CryptoTokenKitError::FrameworkError(
+                "Swift bridge returned a null transmit reply".into(),
+            ));
+        }
+        decode_json(reply_ptr)
+    }
+
+    pub fn end_session(&self) {
+        unsafe { ffi::smart_card::ctk_smart_card_end_session(self.raw) };
+    }
+
+    pub fn send_ins(
+        &self,
+        ins: u8,
+        p1: u8,
+        p2: u8,
+        data: Option<&[u8]>,
+        le: Option<usize>,
+    ) -> Result<ApduResponse, CryptoTokenKitError> {
+        let (data_ptr, data_len) =
+            data.map_or((ptr::null(), 0), |bytes| (bytes.as_ptr(), bytes.len()));
+        let mut reply_ptr = ptr::null_mut();
+        let mut error_ptr = ptr::null_mut();
+        let status = unsafe {
+            ffi::smart_card::ctk_smart_card_send_ins(
+                self.raw,
+                ins,
+                p1,
+                p2,
+                data_ptr,
+                data_len,
+                le.is_some(),
+                le.unwrap_or_default(),
+                &mut reply_ptr,
+                &mut error_ptr,
+            )
+        };
+        status_result(status, error_ptr)?;
+        if reply_ptr.is_null() {
+            return Err(CryptoTokenKitError::FrameworkError(
+                "Swift bridge returned a null APDU reply".into(),
+            ));
+        }
+        decode_json(reply_ptr)
+    }
+
+    pub fn with_session<T>(
+        &self,
+        callback: impl FnOnce(&Self) -> Result<T, CryptoTokenKitError>,
+    ) -> Result<T, CryptoTokenKitError> {
+        self.begin_session()?;
+        let result = callback(self);
+        self.end_session();
+        result
+    }
+}
+
+impl Drop for SmartCard {
+    fn drop(&mut self) {
+        if !self.raw.is_null() {
+            unsafe { ffi::ctk_object_release(self.raw) };
+            self.raw = ptr::null_mut();
+        }
+    }
+}
