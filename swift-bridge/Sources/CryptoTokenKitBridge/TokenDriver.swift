@@ -27,12 +27,5 @@ public func ctk_smart_card_token_driver_new() -> UnsafeMutableRawPointer? {
 
 @_cdecl("ctk_driver_configurations_json")
 public func ctk_driver_configurations_json() -> UnsafeMutablePointer<CChar>? {
-    guard #available(macOS 10.15, *) else {
-        return ctkCString("{}")
-    }
-    var configurations: [String: Any] = [:]
-    for (classID, configuration) in TKTokenDriver.Configuration.driverConfigurations {
-        configurations[classID] = ctkTokenDriverConfigurationDictionary(configuration)
-    }
-    return ctkCString(ctkJSONString(configurations))
+    ctkCString(ctkJSONString(ctkDriverConfigurationsSnapshotDictionary()))
 }

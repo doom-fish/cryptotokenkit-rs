@@ -5,6 +5,48 @@ use libc::free;
 
 use crate::ffi;
 
+pub const TK_ERROR_DOMAIN: &str = "CryptoTokenKit";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(i32)]
+pub enum TKErrorCode {
+    NotImplemented = -1,
+    CommunicationError = -2,
+    CorruptedData = -3,
+    CanceledByUser = -4,
+    AuthenticationFailed = -5,
+    ObjectNotFound = -6,
+    TokenNotFound = -7,
+    BadParameter = -8,
+    AuthenticationNeeded = -9,
+}
+
+impl TKErrorCode {
+    #[must_use]
+    pub const fn from_raw(raw: i32) -> Option<Self> {
+        match raw {
+            -1 => Some(Self::NotImplemented),
+            -2 => Some(Self::CommunicationError),
+            -3 => Some(Self::CorruptedData),
+            -4 => Some(Self::CanceledByUser),
+            -5 => Some(Self::AuthenticationFailed),
+            -6 => Some(Self::ObjectNotFound),
+            -7 => Some(Self::TokenNotFound),
+            -8 => Some(Self::BadParameter),
+            -9 => Some(Self::AuthenticationNeeded),
+            _ => None,
+        }
+    }
+}
+
+impl TryFrom<i32> for TKErrorCode {
+    type Error = i32;
+
+    fn try_from(value: i32) -> Result<Self, Self::Error> {
+        Self::from_raw(value).ok_or(value)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum CryptoTokenKitError {
@@ -33,6 +75,11 @@ impl CryptoTokenKitError {
             | Self::TimedOut(message)
             | Self::Unknown { message, .. } => message,
         }
+    }
+
+    #[must_use]
+    pub fn framework_code(&self) -> Option<TKErrorCode> {
+        TKErrorCode::from_raw(self.code())
     }
 }
 

@@ -90,6 +90,13 @@ pub struct SmartCardSlot {
     raw: *mut c_void,
 }
 
+impl SmartCardSlot {
+    #[must_use]
+    pub(crate) const fn from_raw(raw: *mut c_void) -> Self {
+        Self { raw }
+    }
+}
+
 unsafe extern "C" fn slot_state_trampoline(user_info: *mut c_void, raw_state: i32) {
     if user_info.is_null() {
         return;

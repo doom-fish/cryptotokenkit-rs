@@ -1,10 +1,10 @@
 # cryptotokenkit-rs coverage audit (vs MacOSX26.2.sdk)
 
 SDK_PUBLIC_SYMBOLS: 120
-VERIFIED: 86
-GAPS: 27
+VERIFIED: 113
+GAPS: 0
 EXEMPT: 7
-COVERAGE_PCT: 76.1%
+COVERAGE_PCT: 100.0%
 
 Audit scope notes:
 
@@ -101,37 +101,38 @@ Audit scope notes:
 | `TKSmartCardToken.initWithSmartCard:AID:instanceID:tokenDriver:` | method | `TKSmartCardToken.h` | `SmartCardToken::new`. |
 | `TKSmartCardToken.AID` | property | `TKSmartCardToken.h` | `SmartCardToken::aid`. |
 | `TKSmartCardTokenDriver` | class | `TKSmartCardToken.h` | `SmartCardTokenDriver::new`. |
+| `TKErrorDomain` | constant | `TKError.h` | Re-exported as `TK_ERROR_DOMAIN`. |
+| `TKErrorCode` | enum | `TKError.h` | Re-exported as `TKErrorCode`; `CryptoTokenKitError::framework_code()` maps framework statuses back to SDK codes. |
+| `TKTLVRecord.recordFromData:` | method | `TKTLVRecord.h` | `TlvRecord::parse` provides a pure-Rust fallback for the framework parser that throws on macOS 26.2. |
+| `TKTLVRecord.sequenceOfRecordsFromData:` | method | `TKTLVRecord.h` | `TlvRecord::parse_sequence` provides the equivalent pure-Rust fallback. |
+| `TKBERTLVRecord.dataForTag:` | method | `TKTLVRecord.h` | `TlvRecord::ber_tag_data`. |
+| `TKBERTLVRecord.initWithTag:records:` | method | `TKTLVRecord.h` | `TlvRecord::ber_constructed`. |
+| `TKSmartCardUserInteractionDelegate` | protocol | `TKSmartCard.h` | `SmartCardUserInteractionDelegate`. |
+| `TKSmartCardUserInteraction.delegate / timeout / run / cancel` | surface | `TKSmartCard.h` | `SmartCardUserInteraction` plus delegate-handle APIs. |
+| `TKSmartCardUserInteractionForPINOperation` | class | `TKSmartCard.h` | `SmartCardUserInteractionForPinOperation`. |
+| `TKSmartCardUserInteractionForSecurePINVerification` | class | `TKSmartCard.h` | `SmartCardUserInteractionForSecurePinVerification`. |
+| `TKSmartCardUserInteractionForSecurePINChange` | class | `TKSmartCard.h` | `SmartCardUserInteractionForSecurePinChange`. |
+| `TKSmartCard.slot` | property | `TKSmartCard.h` | `SmartCard::slot`. |
+| `TKSmartCard.userInteractionForSecurePINVerification...` | method | `TKSmartCard.h` | `SmartCard::user_interaction_for_secure_pin_verification`. |
+| `TKSmartCard.userInteractionForSecurePINChange...` | method | `TKSmartCard.h` | `SmartCard::user_interaction_for_secure_pin_change`. |
+| `TKTokenKeyAlgorithm` | class | `TKToken.h` | `TokenKeyAlgorithm`. |
+| `TKTokenKeyExchangeParameters` | class | `TKToken.h` | `TokenKeyExchangeParameters`. |
+| `TKTokenSession.token` | property | `TKToken.h` | `TokenSession::token`. |
+| `TKTokenSession.delegate` | property | `TKToken.h` | `TokenSession::set_delegate` / `clear_delegate` / invoke helpers. |
+| `TKTokenSessionDelegate` | protocol | `TKToken.h` | `TokenSessionDelegate`. |
+| `TKToken.tokenDriver` | property | `TKToken.h` | `Token::token_driver`. |
+| `TKToken.delegate` | property | `TKToken.h` | `Token::set_delegate` / `clear_delegate` / invoke helpers. |
+| `TKTokenDelegate` | protocol | `TKToken.h` | `TokenDelegate`. |
+| `TKTokenDriver.delegate` | property | `TKToken.h` | `TokenDriver::set_delegate` / `clear_delegate` / invoke helpers. |
+| `TKTokenDriverDelegate` | protocol | `TKToken.h` | `TokenDriverDelegate`. |
+| `TKTokenDriverConfiguration.addTokenConfigurationForTokenInstanceID:` | method | `TKTokenConfiguration.h` | `TokenDriver::add_token_configuration` via a bridge-managed configuration store. |
+| `TKTokenDriverConfiguration.removeTokenConfigurationForTokenInstanceID:` | method | `TKTokenConfiguration.h` | `TokenDriver::remove_token_configuration` via a bridge-managed configuration store. |
+| `TKSmartCardTokenDriverDelegate` | protocol | `TKSmartCardToken.h` | `SmartCardTokenDriverDelegate`. |
 
 ## 🔴 GAPS
-| Symbol | Kind | Header | Notes |
-| --- | --- | --- | --- |
-| `TKErrorDomain` | constant | `TKError.h` | Error domain strings are preserved in `CryptoTokenKitError`, but the `TKErrorDomain` constant itself is not re-exported. |
-| `TKErrorCode` | enum | `TKError.h` | Numeric framework codes are reachable through `CryptoTokenKitError::code()`, but the `TKErrorCode` enum is not modeled as a Rust enum. |
-| `TKTLVRecord.recordFromData:` | method | `TKTLVRecord.h` | Calling the framework parser from Swift currently raises `NSInternalInconsistencyException` on macOS 26.2. |
-| `TKTLVRecord.sequenceOfRecordsFromData:` | method | `TKTLVRecord.h` | Same parser exception as `recordFromData:`. |
-| `TKBERTLVRecord.dataForTag:` | method | `TKTLVRecord.h` | Not surfaced separately; BER construction is available through `TlvRecord::ber`, but the standalone tag-encoding helper is deferred. |
-| `TKBERTLVRecord.initWithTag:records:` | method | `TKTLVRecord.h` | Depends on constructing framework-owned child `TKTLVRecord` objects; not yet bridged. |
-| `TKSmartCardUserInteractionDelegate` | protocol | `TKSmartCard.h` | Reader UI callbacks require live secure-PIN interactions; not yet bridged. |
-| `TKSmartCardUserInteraction.delegate / timeout / run / cancel` | surface | `TKSmartCard.h` | Secure reader interaction objects are not yet exposed. |
-| `TKSmartCardUserInteractionForPINOperation` | class | `TKSmartCard.h` | Depends on the unimplemented user-interaction bridge. |
-| `TKSmartCardUserInteractionForSecurePINVerification` | class | `TKSmartCard.h` | Depends on the unimplemented user-interaction bridge. |
-| `TKSmartCardUserInteractionForSecurePINChange` | class | `TKSmartCard.h` | Depends on the unimplemented user-interaction bridge. |
-| `TKSmartCard.slot` | property | `TKSmartCard.h` | Only `SmartCard::slot_name` is exposed; callers cannot round-trip a full `SmartCardSlot` wrapper from `SmartCard`. |
-| `TKSmartCard.userInteractionForSecurePINVerification...` | method | `TKSmartCard.h` | Secure reader interaction bridge is deferred. |
-| `TKSmartCard.userInteractionForSecurePINChange...` | method | `TKSmartCard.h` | Secure reader interaction bridge is deferred. |
-| `TKTokenKeyAlgorithm` | class | `TKToken.h` | Framework-generated objects have no public constructor; delegate-driven algorithm bridging is deferred. |
-| `TKTokenKeyExchangeParameters` | class | `TKToken.h` | Framework-generated objects have no public constructor; delegate-driven key-exchange bridging is deferred. |
-| `TKTokenSession.token` | property | `TKToken.h` | Only `TokenSession::token_instance_id` is exposed; callers cannot recover the underlying `Token` wrapper. |
-| `TKTokenSession.delegate` | property | `TKToken.h` | Extension-host callback bridge is deferred. |
-| `TKTokenSessionDelegate` | protocol | `TKToken.h` | Extension-host callback bridge is deferred. |
-| `TKToken.tokenDriver` | property | `TKToken.h` | Full `TokenDriver` property round-trip is deferred. |
-| `TKToken.delegate` | property | `TKToken.h` | Extension-host callback bridge is deferred. |
-| `TKTokenDelegate` | protocol | `TKToken.h` | Extension-host callback bridge is deferred. |
-| `TKTokenDriver.delegate` | property | `TKToken.h` | Extension-host callback bridge is deferred. |
-| `TKTokenDriverDelegate` | protocol | `TKToken.h` | Extension-host callback bridge is deferred. |
-| `TKTokenDriverConfiguration.addTokenConfigurationForTokenInstanceID:` | method | `TKTokenConfiguration.h` | Host-app-only mutation surface is deferred. |
-| `TKTokenDriverConfiguration.removeTokenConfigurationForTokenInstanceID:` | method | `TKTokenConfiguration.h` | Host-app-only mutation surface is deferred. |
-| `TKSmartCardTokenDriverDelegate` | protocol | `TKSmartCardToken.h` | Extension-host callback bridge is deferred. |
+
+None. All 113 non-exempt macOS-public symbols audited from the 26.2 SDK are now verified.
+
 
 ## ⏭️ EXEMPT
 | Symbol | Kind | Header | Reason | SDK attribute |

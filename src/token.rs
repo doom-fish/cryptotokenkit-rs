@@ -47,6 +47,17 @@ impl Token {
         self.raw
     }
 
+    #[must_use]
+    pub(crate) const fn from_raw(raw: *mut c_void) -> Self {
+        Self { raw }
+    }
+
+    pub(crate) fn into_raw(mut self) -> *mut c_void {
+        let raw = self.raw;
+        self.raw = ptr::null_mut();
+        raw
+    }
+
     pub fn configuration(&self) -> Result<TokenConfigurationSnapshot, CryptoTokenKitError> {
         let mut error_ptr = ptr::null_mut();
         let ptr = unsafe { ffi::token::ctk_token_configuration_json(self.raw, &mut error_ptr) };
@@ -174,6 +185,17 @@ impl SmartCardToken {
     #[must_use]
     pub(crate) const fn raw(&self) -> *mut c_void {
         self.raw
+    }
+
+    #[must_use]
+    pub(crate) const fn from_raw(raw: *mut c_void) -> Self {
+        Self { raw }
+    }
+
+    pub(crate) fn into_raw(mut self) -> *mut c_void {
+        let raw = self.raw;
+        self.raw = ptr::null_mut();
+        raw
     }
 
     pub fn aid(&self) -> Result<Option<Vec<u8>>, CryptoTokenKitError> {

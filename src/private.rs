@@ -1,5 +1,8 @@
 use std::ffi::CString;
+use std::ptr;
 
+use core::ffi::c_char;
+use libc::strdup;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
@@ -48,4 +51,27 @@ pub fn status_result(status: i32, error_ptr: *mut core::ffi::c_char) -> Result<(
     } else {
         Err(crate::error::from_swift(status, error_ptr))
     }
+}
+
+#[must_use]
+pub fn clone_cstring_ptr(value: &CString) -> *mut c_char {
+    unsafe { strdup(value.as_ptr()) }
+}
+
+#[must_use]
+pub fn string_to_ptr(value: &str) -> *mut c_char {
+    to_cstring(value).map_or(ptr::null_mut(), |cstring| clone_cstring_ptr(&cstring))
+}
+
+pub fn write_error_ptr(error_out: *mut *mut c_char, message: &str) {
+    if error_out.is_null() {
+        return;
+    }
+    unsafe {
+        *error_out = string_to_ptr(message);
+    }
+}
+
+pub fn json_to_ptr<T: Serialize + ?Sized>(value: &T) -> Result<*mut c_char, CryptoTokenKitError> {
+    encode_json_cstring(value).map(|cstring| clone_cstring_ptr(&cstring))
 }

@@ -3,7 +3,7 @@ use core::ffi::c_void;
 use serde::{Deserialize, Serialize};
 
 use crate::ffi;
-use crate::private::decode_optional_json;
+use crate::private::{decode_optional_json, encode_json_cstring};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct SmartCardProtocol(pub u32);
@@ -51,6 +51,19 @@ impl TlvRecord {
         decode_optional_json(ptr).ok().flatten()
     }
 
+    pub fn ber_tag_data(tag: u64) -> Option<Vec<u8>> {
+        let ptr = unsafe { ffi::smart_card_atr::ctk_ber_tlv_tag_data_json(tag) };
+        decode_optional_json(ptr).ok().flatten()
+    }
+
+    pub fn ber_constructed(tag: u64, records: &[Self]) -> Option<Self> {
+        let payload = encode_json_cstring(records).ok()?;
+        let ptr = unsafe {
+            ffi::smart_card_atr::ctk_ber_tlv_record_with_records_json(tag, payload.as_ptr())
+        };
+        decode_optional_json(ptr).ok().flatten()
+    }
+
     pub fn simple(tag: u8, value: &[u8]) -> Option<Self> {
         let ptr = unsafe { ffi::smart_card_atr::ctk_simple_tlv_record_json(tag, value.as_ptr(), value.len()) };
         decode_optional_json(ptr).ok().flatten()
@@ -60,6 +73,133 @@ impl TlvRecord {
         let ptr = unsafe { ffi::smart_card_atr::ctk_compact_tlv_record_json(tag, value.as_ptr(), value.len()) };
         decode_optional_json(ptr).ok().flatten()
     }
+
+    pub fn parse(data: &[u8]) -> Option<Self> {
+        Self::parse_with_encoding(TlvEncoding::Ber, data)
+            .or_else(|| Self::parse_with_encoding(TlvEncoding::Simple, data))
+            .or_else(|| Self::parse_with_encoding(TlvEncoding::Compact, data))
+    }
+
+    pub fn parse_with_encoding(encoding: TlvEncoding, data: &[u8]) -> Option<Self> {
+        let (record, consumed) = parse_tlv_record_prefix(encoding, data)?;
+        (consumed == data.len()).then_some(record)
+    }
+
+    pub fn parse_sequence(data: &[u8]) -> Option<Vec<Self>> {
+        parse_tlv_sequence_with_fallback(data)
+    }
+
+    pub fn parse_sequence_with_encoding(encoding: TlvEncoding, data: &[u8]) -> Option<Vec<Self>> {
+        let mut remaining = data;
+        let mut records = Vec::new();
+        while !remaining.is_empty() {
+            let (record, consumed) = parse_tlv_record_prefix(encoding, remaining)?;
+            records.push(record);
+            remaining = &remaining[consumed..];
+        }
+        Some(records)
+    }
+}
+
+fn parse_tlv_sequence_with_fallback(data: &[u8]) -> Option<Vec<TlvRecord>> {
+    let mut remaining = data;
+    let mut records = Vec::new();
+    while !remaining.is_empty() {
+        let (record, consumed) = parse_tlv_record_prefix(TlvEncoding::Ber, remaining)
+            .or_else(|| parse_tlv_record_prefix(TlvEncoding::Simple, remaining))
+            .or_else(|| parse_tlv_record_prefix(TlvEncoding::Compact, remaining))?;
+        records.push(record);
+        remaining = &remaining[consumed..];
+    }
+    Some(records)
+}
+
+fn parse_tlv_record_prefix(encoding: TlvEncoding, data: &[u8]) -> Option<(TlvRecord, usize)> {
+    match encoding {
+        TlvEncoding::Ber => parse_ber_record_prefix(data),
+        TlvEncoding::Simple => parse_simple_record_prefix(data),
+        TlvEncoding::Compact => parse_compact_record_prefix(data),
+    }
+}
+
+fn parse_compact_record_prefix(data: &[u8]) -> Option<(TlvRecord, usize)> {
+    let header = *data.first()?;
+    let len = usize::from(header & 0x0F);
+    let total = 1 + len;
+    if data.len() < total {
+        return None;
+    }
+    let tag = u64::from(header >> 4);
+    let value = &data[1..total];
+    u8::try_from(tag)
+        .ok()
+        .and_then(|tag| TlvRecord::compact(tag, value).map(|record| (record, total)))
+}
+
+fn parse_simple_record_prefix(data: &[u8]) -> Option<(TlvRecord, usize)> {
+    let tag = *data.first()?;
+    if tag == 0 || tag == 0xFF {
+        return None;
+    }
+    let length_marker = *data.get(1)?;
+    let (header_len, value_len) = if length_marker == 0xFF {
+        let high = *data.get(2)?;
+        let low = *data.get(3)?;
+        (4, usize::from(u16::from_be_bytes([high, low])))
+    } else {
+        (2, usize::from(length_marker))
+    };
+    let total = header_len + value_len;
+    if data.len() < total {
+        return None;
+    }
+    let value = &data[header_len..total];
+    TlvRecord::simple(tag, value).map(|record| (record, total))
+}
+
+fn parse_ber_record_prefix(data: &[u8]) -> Option<(TlvRecord, usize)> {
+    let first = *data.first()?;
+    let mut tag_len = 1usize;
+    if first & 0x1F == 0x1F {
+        loop {
+            let byte = *data.get(tag_len)?;
+            tag_len += 1;
+            if byte & 0x80 == 0 {
+                break;
+            }
+            if tag_len > 8 {
+                return None;
+            }
+        }
+    }
+    let tag_bytes = &data[..tag_len];
+    let mut tag = 0u64;
+    for byte in tag_bytes {
+        tag = (tag << 8) | u64::from(*byte);
+    }
+
+    let length_byte = *data.get(tag_len)?;
+    let (length_len, value_len) = if length_byte & 0x80 == 0 {
+        (1, usize::from(length_byte))
+    } else {
+        let count = usize::from(length_byte & 0x7F);
+        if count == 0 || count > 8 {
+            return None;
+        }
+        let length_bytes = data.get(tag_len + 1..tag_len + 1 + count)?;
+        let mut value_len = 0usize;
+        for byte in length_bytes {
+            value_len = (value_len << 8) | usize::from(*byte);
+        }
+        (1 + count, value_len)
+    };
+
+    let total = tag_len + length_len + value_len;
+    if data.len() < total {
+        return None;
+    }
+    let value = &data[tag_len + length_len..total];
+    TlvRecord::ber(tag, value).map(|record| (record, total))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

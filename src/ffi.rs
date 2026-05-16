@@ -10,7 +10,9 @@ pub mod status {
 pub mod scard_slot_manager;
 pub mod smart_card;
 pub mod smart_card_atr;
+pub mod smart_card_interaction;
 pub mod token;
+pub mod token_delegate;
 pub mod token_driver;
 pub mod token_session;
 pub mod token_watcher;

@@ -19,4 +19,6 @@ unsafe extern "C" {
         value_ptr: *const u8,
         value_len: usize,
     ) -> *mut c_char;
+    pub fn ctk_ber_tlv_tag_data_json(tag: u64) -> *mut c_char;
+    pub fn ctk_ber_tlv_record_with_records_json(tag: u64, records_json: *const c_char) -> *mut c_char;
 }

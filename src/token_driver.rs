@@ -45,6 +45,11 @@ impl TokenDriver {
     pub(crate) const fn raw(&self) -> *mut c_void {
         self.raw
     }
+
+    #[must_use]
+    pub(crate) const fn from_raw(raw: *mut c_void) -> Self {
+        Self { raw }
+    }
 }
 
 impl Default for TokenDriver {
@@ -67,6 +72,11 @@ impl SmartCardTokenDriver {
     #[must_use]
     pub(crate) const fn raw(&self) -> *mut c_void {
         self.raw
+    }
+
+    #[must_use]
+    pub(crate) const fn from_raw(raw: *mut c_void) -> Self {
+        Self { raw }
     }
 }
 

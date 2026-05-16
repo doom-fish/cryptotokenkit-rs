@@ -47,6 +47,22 @@ impl TokenSession {
         Self { raw }
     }
 
+    #[must_use]
+    pub(crate) const fn raw(&self) -> *mut c_void {
+        self.raw
+    }
+
+    #[must_use]
+    pub(crate) const fn from_raw(raw: *mut c_void) -> Self {
+        Self { raw }
+    }
+
+    pub(crate) fn into_raw(mut self) -> *mut c_void {
+        let raw = self.raw;
+        self.raw = ptr::null_mut();
+        raw
+    }
+
     pub fn token_instance_id(&self) -> Result<String, CryptoTokenKitError> {
         let ptr = unsafe { ffi::token_session::ctk_token_session_token_instance_id(self.raw) };
         if ptr.is_null() {
@@ -111,6 +127,17 @@ impl TokenAuthOperation {
         Self { raw }
     }
 
+    #[must_use]
+    pub(crate) const fn from_raw(raw: *mut c_void) -> Self {
+        Self { raw }
+    }
+
+    pub(crate) fn into_raw(mut self) -> *mut c_void {
+        let raw = self.raw;
+        self.raw = ptr::null_mut();
+        raw
+    }
+
     pub fn finish(&self) -> Result<(), CryptoTokenKitError> {
         let mut error_ptr = ptr::null_mut();
         let status = unsafe {
@@ -135,6 +162,17 @@ impl TokenPasswordAuthOperation {
             "Swift bridge returned a null token password auth operation"
         );
         Self { raw }
+    }
+
+    #[must_use]
+    pub(crate) const fn from_raw(raw: *mut c_void) -> Self {
+        Self { raw }
+    }
+
+    pub(crate) fn into_raw(mut self) -> *mut c_void {
+        let raw = self.raw;
+        self.raw = ptr::null_mut();
+        raw
     }
 
     pub fn password(&self) -> Result<Option<String>, CryptoTokenKitError> {
@@ -196,6 +234,17 @@ impl TokenSmartCardPinAuthOperation {
             "Swift bridge returned a null smart-card PIN auth operation"
         );
         Self { raw }
+    }
+
+    #[must_use]
+    pub(crate) const fn from_raw(raw: *mut c_void) -> Self {
+        Self { raw }
+    }
+
+    pub(crate) fn into_raw(mut self) -> *mut c_void {
+        let raw = self.raw;
+        self.raw = ptr::null_mut();
+        raw
     }
 
     fn snapshot(&self) -> Result<TokenSmartCardPinAuthOperationSnapshot, CryptoTokenKitError> {

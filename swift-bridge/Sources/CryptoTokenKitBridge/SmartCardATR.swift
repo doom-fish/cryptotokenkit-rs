@@ -44,6 +44,24 @@ func ctkATRDictionary(_ atr: TKSmartCardATR) -> [String: Any] {
     ]
 }
 
+func ctkTLVRecord(from dictionary: [String: Any]) -> TKTLVRecord? {
+    guard let encoding = ctkString(from: dictionary["encoding"]),
+          let tag = ctkNumber(from: dictionary["tag"])?.uint64Value,
+          let value = ctkData(from: dictionary["value"]) else {
+        return nil
+    }
+    switch encoding {
+    case "ber", "Ber":
+        return TKBERTLVRecord(tag: tag, value: value)
+    case "simple", "Simple":
+        return TKSimpleTLVRecord(tag: UInt8(truncatingIfNeeded: tag), value: value)
+    case "compact", "Compact":
+        return TKCompactTLVRecord(tag: UInt8(truncatingIfNeeded: tag), value: value)
+    default:
+        return nil
+    }
+}
+
 @_cdecl("ctk_smart_card_atr_parse_bytes_json")
 public func ctk_smart_card_atr_parse_bytes_json(
     _ dataPtr: UnsafePointer<UInt8>?,
@@ -100,4 +118,26 @@ public func ctk_compact_tlv_record_json(
     let value = valuePtr.map { Data(bytes: $0, count: valueLen) } ?? Data()
     let record = TKCompactTLVRecord(tag: tag, value: value)
     return ctkCString(ctkJSONString(ctkTlvRecordDictionary(record, encoding: "compact")))
+}
+
+@_cdecl("ctk_ber_tlv_tag_data_json")
+public func ctk_ber_tlv_tag_data_json(_ tag: UInt64) -> UnsafeMutablePointer<CChar>? {
+    ctkCString(ctkJSONString([UInt8](TKBERTLVRecord.data(forTag: tag))))
+}
+
+@_cdecl("ctk_ber_tlv_record_with_records_json")
+public func ctk_ber_tlv_record_with_records_json(
+    _ tag: UInt64,
+    _ recordsJSON: UnsafePointer<CChar>?
+) -> UnsafeMutablePointer<CChar>? {
+    guard let recordsJSON,
+          let value = ctkJSONValue(from: recordsJSON) as? [[String: Any]] else {
+        return nil
+    }
+    let records = value.compactMap(ctkTLVRecord(from:))
+    guard records.count == value.count else {
+        return nil
+    }
+    let record = TKBERTLVRecord(tag: tag, records: records)
+    return ctkCString(ctkJSONString(ctkTlvRecordDictionary(record, encoding: "ber")))
 }

@@ -34,6 +34,30 @@ pub enum TokenOperation {
     PerformKeyExchange,
 }
 
+impl TokenOperation {
+    #[must_use]
+    pub const fn raw(self) -> i32 {
+        match self {
+            Self::None => 0,
+            Self::ReadData => 1,
+            Self::SignData => 2,
+            Self::DecryptData => 3,
+            Self::PerformKeyExchange => 4,
+        }
+    }
+
+    #[must_use]
+    pub const fn from_raw(raw: i32) -> Self {
+        match raw {
+            1 => Self::ReadData,
+            2 => Self::SignData,
+            3 => Self::DecryptData,
+            4 => Self::PerformKeyExchange,
+            _ => Self::None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TokenKeychainItem {

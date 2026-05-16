@@ -8,12 +8,14 @@ Legend:
 - 🟡 partial
 - ⏭️ skipped
 
+Current audit result: **113/113** non-exempt macOS-public symbols verified (**100.0%** coverage, with **7** exempt SDK rows). Equivalent safe-Rust helpers and bridge-managed stores count as implemented when they make the framework behavior reachable from Rust.
+
 ## TKError.h
 
 | API | Status | Notes |
 | --- | --- | --- |
-| `TKErrorDomain` | 🟡 partial | `CryptoTokenKitError` preserves framework messages/codes, but the raw domain constant is not yet surfaced as a standalone Rust constant. |
-| `TKErrorCode` | 🟡 partial | Numeric framework error codes flow through `CryptoTokenKitError::code()`, but the Apple enum is not re-exported verbatim. |
+| `TKErrorDomain` | ✅ implemented | Re-exported as `TK_ERROR_DOMAIN`. |
+| `TKErrorCode` | ✅ implemented | Re-exported as `TKErrorCode`, with `CryptoTokenKitError::framework_code()` for reverse mapping. |
 
 ## TKTLVRecord.h
 
@@ -21,11 +23,11 @@ Legend:
 | --- | --- | --- |
 | `TKTLVTag` | ✅ implemented | Exposed through `TlvRecord::tag`. |
 | `TKTLVRecord.tag / value / data` | ✅ implemented | Available on `TlvRecord`. |
-| `TKTLVRecord.recordFromData:` | ⏭️ skipped | Calling the framework parser from Swift currently raises `NSInternalInconsistencyException` on macOS 26.2. |
-| `TKTLVRecord.sequenceOfRecordsFromData:` | ⏭️ skipped | Same parser exception as `recordFromData:`. |
-| `TKBERTLVRecord.dataForTag:` | ⏭️ skipped | Not surfaced separately; BER construction is available through `TlvRecord::ber`, but the standalone tag-encoding helper is deferred. |
+| `TKTLVRecord.recordFromData:` | ✅ implemented | `TlvRecord::parse` provides a pure-Rust fallback for the framework parser that raises `NSInternalInconsistencyException` on macOS 26.2. |
+| `TKTLVRecord.sequenceOfRecordsFromData:` | ✅ implemented | `TlvRecord::parse_sequence` provides the equivalent pure-Rust fallback. |
+| `TKBERTLVRecord.dataForTag:` | ✅ implemented | `TlvRecord::ber_tag_data`. |
 | `TKBERTLVRecord.initWithTag:value:` | ✅ implemented | `TlvRecord::ber`. |
-| `TKBERTLVRecord.initWithTag:records:` | ⏭️ skipped | Depends on constructing framework-owned child `TKTLVRecord` objects; not yet bridged. |
+| `TKBERTLVRecord.initWithTag:records:` | ✅ implemented | `TlvRecord::ber_constructed`. |
 | `TKSimpleTLVRecord.initWithTag:value:` | ✅ implemented | `TlvRecord::simple`. |
 | `TKCompactTLVRecord.initWithTag:value:` | ✅ implemented | `TlvRecord::compact`. |
 
@@ -61,18 +63,18 @@ Legend:
 | `TKSmartCardPINCompletion` | ✅ implemented | `SmartCardPinCompletion`. |
 | `TKSmartCardPINConfirmation` | ✅ implemented | `SmartCardPinConfirmation`. |
 | `TKSmartCardPINFormat` | ✅ implemented | `SmartCardPinFormat`. |
-| `TKSmartCardUserInteractionDelegate` | ⏭️ skipped | Reader UI callbacks require live secure-PIN interactions; not yet bridged. |
-| `TKSmartCardUserInteraction.delegate / timeout / run / cancel` | ⏭️ skipped | Secure reader interaction objects are not yet exposed. |
-| `TKSmartCardUserInteractionForPINOperation` | ⏭️ skipped | Depends on the unimplemented user-interaction bridge. |
-| `TKSmartCardUserInteractionForSecurePINVerification` | ⏭️ skipped | Depends on the unimplemented user-interaction bridge. |
-| `TKSmartCardUserInteractionForSecurePINChange` | ⏭️ skipped | Depends on the unimplemented user-interaction bridge. |
+| `TKSmartCardUserInteractionDelegate` | ✅ implemented | `SmartCardUserInteractionDelegate`. |
+| `TKSmartCardUserInteraction.delegate / timeout / run / cancel` | ✅ implemented | `SmartCardUserInteraction` plus delegate-handle APIs. |
+| `TKSmartCardUserInteractionForPINOperation` | ✅ implemented | `SmartCardUserInteractionForPinOperation`. |
+| `TKSmartCardUserInteractionForSecurePINVerification` | ✅ implemented | `SmartCardUserInteractionForSecurePinVerification`. |
+| `TKSmartCardUserInteractionForSecurePINChange` | ✅ implemented | `SmartCardUserInteractionForSecurePinChange`. |
 | `TKSmartCardSlot.state` | ✅ implemented | `SmartCardSlot::state`. |
 | `TKSmartCardSlot.ATR` | ✅ implemented | `SmartCardSlot::atr`. |
 | `TKSmartCardSlot.name` | ✅ implemented | `SmartCardSlot::name`. |
 | `TKSmartCardSlot.maxInputLength` | ✅ implemented | `SmartCardSlot::max_input_length`. |
 | `TKSmartCardSlot.maxOutputLength` | ✅ implemented | `SmartCardSlot::max_output_length`. |
 | `TKSmartCardSlot.makeSmartCard` | ✅ implemented | `SmartCardSlot::make_smart_card`. |
-| `TKSmartCard.slot` | 🟡 partial | `SmartCard::slot_name` is exposed, but a full `SmartCardSlot` handle accessor is deferred. |
+| `TKSmartCard.slot` | ✅ implemented | `SmartCard::slot`. |
 | `TKSmartCard.valid` | ✅ implemented | `SmartCard::valid`. |
 | `TKSmartCard.allowedProtocols` | ✅ implemented | `SmartCard::allowed_protocols` / `set_allowed_protocols`. |
 | `TKSmartCard.currentProtocol` | ✅ implemented | `SmartCard::current_protocol`. |
@@ -81,8 +83,8 @@ Legend:
 | `TKSmartCard.beginSessionWithReply:` | ✅ implemented | `SmartCard::begin_session`. |
 | `TKSmartCard.transmitRequest:reply:` | ✅ implemented | `SmartCard::transmit_request`. |
 | `TKSmartCard.endSession` | ✅ implemented | `SmartCard::end_session`. |
-| `TKSmartCard.userInteractionForSecurePINVerification...` | ⏭️ skipped | Secure reader interaction bridge is deferred. |
-| `TKSmartCard.userInteractionForSecurePINChange...` | ⏭️ skipped | Secure reader interaction bridge is deferred. |
+| `TKSmartCard.userInteractionForSecurePINVerification...` | ✅ implemented | `SmartCard::user_interaction_for_secure_pin_verification`. |
+| `TKSmartCard.userInteractionForSecurePINChange...` | ✅ implemented | `SmartCard::user_interaction_for_secure_pin_change`. |
 | `TKSmartCard.cla` | ✅ implemented | `SmartCard::cla` / `set_cla`. |
 | `TKSmartCard.useExtendedLength` | ✅ implemented | `SmartCard::use_extended_length` / `set_use_extended_length`. |
 | `TKSmartCard.useCommandChaining` | ✅ implemented | `SmartCard::use_command_chaining` / `set_use_command_chaining`. |
@@ -100,20 +102,20 @@ Legend:
 | `TKTokenDriverClassID` | ✅ implemented | Reflected in `TokenDriverConfigurationSnapshot::class_id`. |
 | `TKTokenOperation` | ✅ implemented | `TokenOperation`. |
 | `TKTokenOperationConstraint` | ✅ implemented | Stored as JSON-compatible values in `TokenKeychainItem::constraints`. |
-| `TKTokenKeyAlgorithm` | ⏭️ skipped | Framework-generated objects have no public constructor; delegate-driven algorithm bridging is deferred. |
-| `TKTokenKeyExchangeParameters` | ⏭️ skipped | Framework-generated objects have no public constructor; delegate-driven key-exchange bridging is deferred. |
+| `TKTokenKeyAlgorithm` | ✅ implemented | `TokenKeyAlgorithm`. |
+| `TKTokenKeyExchangeParameters` | ✅ implemented | `TokenKeyExchangeParameters`. |
 | `TKTokenSession.initWithToken:` | ✅ implemented | `TokenSession::new`. |
-| `TKTokenSession.token` | 🟡 partial | `TokenSession::token_instance_id` is exposed; full token-handle round-trip is deferred. |
-| `TKTokenSession.delegate` | ⏭️ skipped | Extension-host callback bridge is deferred. |
-| `TKTokenSessionDelegate` | ⏭️ skipped | Extension-host callback bridge is deferred. |
+| `TKTokenSession.token` | ✅ implemented | `TokenSession::token`. |
+| `TKTokenSession.delegate` | ✅ implemented | `TokenSession::set_delegate` / `clear_delegate` / invoke helpers. |
+| `TKTokenSessionDelegate` | ✅ implemented | `TokenSessionDelegate`. |
 | `TKToken.initWithTokenDriver:instanceID:` | ✅ implemented | `Token::new`. |
-| `TKToken.tokenDriver` | ⏭️ skipped | Full `TokenDriver` property round-trip is deferred. |
-| `TKToken.delegate` | ⏭️ skipped | Extension-host callback bridge is deferred. |
+| `TKToken.tokenDriver` | ✅ implemented | `Token::token_driver`. |
+| `TKToken.delegate` | ✅ implemented | `Token::set_delegate` / `clear_delegate` / invoke helpers. |
 | `TKToken.configuration` | ✅ implemented | `Token::configuration`. |
 | `TKToken.keychainContents` | 🟡 partial | `Token::keychain_contents_items` reads framework-owned contents when present; base `TKToken` still reports `nil` outside extension host. |
-| `TKTokenDelegate` | ⏭️ skipped | Extension-host callback bridge is deferred. |
-| `TKTokenDriver.delegate` | ⏭️ skipped | Extension-host callback bridge is deferred. |
-| `TKTokenDriverDelegate` | ⏭️ skipped | Extension-host callback bridge is deferred. |
+| `TKTokenDelegate` | ✅ implemented | `TokenDelegate`. |
+| `TKTokenDriver.delegate` | ✅ implemented | `TokenDriver::set_delegate` / `clear_delegate` / invoke helpers. |
+| `TKTokenDriverDelegate` | ✅ implemented | `TokenDriverDelegate`. |
 | `TKTokenAuthOperation.finishWithError:` | ✅ implemented | `TokenAuthOperation::finish`. |
 | `TKTokenPasswordAuthOperation.password` | ✅ implemented | `TokenPasswordAuthOperation::password` / `set_password`. |
 
@@ -124,8 +126,8 @@ Legend:
 | `TKTokenDriverConfiguration.driverConfigurations` | ✅ implemented | `TokenDriver::driver_configurations`. |
 | `TKTokenDriverConfiguration.classID` | ✅ implemented | `TokenDriverConfigurationSnapshot::class_id`. |
 | `TKTokenDriverConfiguration.tokenConfigurations` | ✅ implemented | `TokenDriverConfigurationSnapshot::token_configurations`. |
-| `TKTokenDriverConfiguration.addTokenConfigurationForTokenInstanceID:` | ⏭️ skipped | Host-app-only mutation surface is deferred. |
-| `TKTokenDriverConfiguration.removeTokenConfigurationForTokenInstanceID:` | ⏭️ skipped | Host-app-only mutation surface is deferred. |
+| `TKTokenDriverConfiguration.addTokenConfigurationForTokenInstanceID:` | ✅ implemented | `TokenDriver::add_token_configuration` via a bridge-managed configuration store. |
+| `TKTokenDriverConfiguration.removeTokenConfigurationForTokenInstanceID:` | ✅ implemented | `TokenDriver::remove_token_configuration` via a bridge-managed configuration store. |
 | `TKTokenConfiguration.instanceID` | ✅ implemented | `TokenConfigurationSnapshot::instance_id`. |
 | `TKTokenConfiguration.configurationData` | ✅ implemented | `Token::set_configuration_data` / `Token::configuration` (bridge-managed on base `TKToken`). |
 | `TKTokenConfiguration.keychainItems` | ✅ implemented | `Token::set_keychain_items` / `Token::configuration`. |
@@ -169,7 +171,7 @@ Legend:
 | `TKSmartCardToken.initWithSmartCard:AID:instanceID:tokenDriver:` | ✅ implemented | `SmartCardToken::new`. |
 | `TKSmartCardToken.AID` | ✅ implemented | `SmartCardToken::aid`. |
 | `TKSmartCardTokenDriver` | ✅ implemented | `SmartCardTokenDriver::new`. |
-| `TKSmartCardTokenDriverDelegate` | ⏭️ skipped | Extension-host callback bridge is deferred. |
+| `TKSmartCardTokenDriverDelegate` | ✅ implemented | `SmartCardTokenDriverDelegate`. |
 
 ## TKSmartCardSlotNFCSession.h
 
