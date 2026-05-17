@@ -31,7 +31,10 @@ impl SmartCardUserInteractionDelegate for RecordingInteractionDelegate {
             .push(SmartCardUserInteractionEvent::ValidationKeyPressed);
     }
 
-    fn invalid_character_entered(&mut self, _interaction: &cryptotokenkit::SmartCardUserInteraction) {
+    fn invalid_character_entered(
+        &mut self,
+        _interaction: &cryptotokenkit::SmartCardUserInteraction,
+    ) {
         self.events
             .lock()
             .unwrap()
@@ -81,7 +84,10 @@ fn smart_card_slot_and_user_interactions_work() -> Result<(), Box<dyn std::error
     verification.set_locale_identifier(Some("en-US"))?;
     assert!((verification.initial_timeout() - 1.5).abs() < f64::EPSILON);
     assert!((verification.interaction_timeout() - 2.5).abs() < f64::EPSILON);
-    assert_eq!(verification.pin_completion().bits(), SmartCardPinCompletion::MAX_LENGTH.bits());
+    assert_eq!(
+        verification.pin_completion().bits(),
+        SmartCardPinCompletion::MAX_LENGTH.bits()
+    );
     assert_eq!(verification.pin_message_indices()?, Some(vec![1, 2, 3]));
     assert_eq!(verification.locale_identifier()?, "en-US");
     assert_eq!(verification.result_status_word(), 0);

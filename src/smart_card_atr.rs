@@ -47,7 +47,9 @@ pub struct TlvRecord {
 
 impl TlvRecord {
     pub fn ber(tag: u64, value: &[u8]) -> Option<Self> {
-        let ptr = unsafe { ffi::smart_card_atr::ctk_ber_tlv_record_json(tag, value.as_ptr(), value.len()) };
+        let ptr = unsafe {
+            ffi::smart_card_atr::ctk_ber_tlv_record_json(tag, value.as_ptr(), value.len())
+        };
         decode_optional_json(ptr).ok().flatten()
     }
 
@@ -65,12 +67,16 @@ impl TlvRecord {
     }
 
     pub fn simple(tag: u8, value: &[u8]) -> Option<Self> {
-        let ptr = unsafe { ffi::smart_card_atr::ctk_simple_tlv_record_json(tag, value.as_ptr(), value.len()) };
+        let ptr = unsafe {
+            ffi::smart_card_atr::ctk_simple_tlv_record_json(tag, value.as_ptr(), value.len())
+        };
         decode_optional_json(ptr).ok().flatten()
     }
 
     pub fn compact(tag: u8, value: &[u8]) -> Option<Self> {
-        let ptr = unsafe { ffi::smart_card_atr::ctk_compact_tlv_record_json(tag, value.as_ptr(), value.len()) };
+        let ptr = unsafe {
+            ffi::smart_card_atr::ctk_compact_tlv_record_json(tag, value.as_ptr(), value.len())
+        };
         decode_optional_json(ptr).ok().flatten()
     }
 

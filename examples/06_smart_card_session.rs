@@ -26,7 +26,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     match card.send_ins(0x84, 0x00, 0x00, None, Some(8)) {
-        Ok(reply) => println!("challenge bytes={} sw=0x{:04X}", reply.data.len(), reply.status_word),
+        Ok(reply) => println!(
+            "challenge bytes={} sw=0x{:04X}",
+            reply.data.len(),
+            reply.status_word
+        ),
         Err(error) => println!("smart-card exchange unavailable: {error}"),
     }
 

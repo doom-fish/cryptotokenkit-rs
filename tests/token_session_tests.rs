@@ -9,7 +9,10 @@ fn token_session_and_auth_operations_work() -> Result<(), Box<dyn std::error::Er
     let token = Token::new(&driver, "com.example.cryptotokenkit.session-test")?;
     let session = TokenSession::new(&token);
 
-    assert_eq!(session.token_instance_id()?, "com.example.cryptotokenkit.session-test");
+    assert_eq!(
+        session.token_instance_id()?,
+        "com.example.cryptotokenkit.session-test"
+    );
 
     let auth = TokenAuthOperation::new();
     auth.finish()?;

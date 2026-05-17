@@ -72,7 +72,6 @@ impl TokenSession {
         }
         Ok(crate::error::take_owned_c_string(ptr))
     }
-
 }
 
 impl SmartCardTokenSession {
@@ -110,7 +109,10 @@ impl SmartCardTokenSession {
             )
         };
         if raw.is_null() && !error_ptr.is_null() {
-            return Err(crate::error::from_swift(ffi::status::FRAMEWORK_ERROR, error_ptr));
+            return Err(crate::error::from_swift(
+                ffi::status::FRAMEWORK_ERROR,
+                error_ptr,
+            ));
         }
         Ok((!raw.is_null()).then_some(SmartCard::from_raw(raw)))
     }
@@ -176,7 +178,8 @@ impl TokenPasswordAuthOperation {
     }
 
     pub fn password(&self) -> Result<Option<String>, CryptoTokenKitError> {
-        let ptr = unsafe { ffi::token_session::ctk_token_password_auth_operation_password(self.raw) };
+        let ptr =
+            unsafe { ffi::token_session::ctk_token_password_auth_operation_password(self.raw) };
         if ptr.is_null() {
             return Ok(None);
         }
@@ -248,7 +251,8 @@ impl TokenSmartCardPinAuthOperation {
     }
 
     fn snapshot(&self) -> Result<TokenSmartCardPinAuthOperationSnapshot, CryptoTokenKitError> {
-        let ptr = unsafe { ffi::token_session::ctk_token_smart_card_pin_auth_operation_json(self.raw) };
+        let ptr =
+            unsafe { ffi::token_session::ctk_token_smart_card_pin_auth_operation_json(self.raw) };
         if ptr.is_null() {
             return Err(CryptoTokenKitError::FrameworkError(
                 "Swift bridge returned a null smart-card PIN auth operation snapshot".into(),
@@ -277,7 +281,10 @@ impl TokenSmartCardPinAuthOperation {
         Ok(self.snapshot()?.pin_format)
     }
 
-    pub fn set_pin_format(&self, pin_format: SmartCardPinFormat) -> Result<(), CryptoTokenKitError> {
+    pub fn set_pin_format(
+        &self,
+        pin_format: SmartCardPinFormat,
+    ) -> Result<(), CryptoTokenKitError> {
         let mut snapshot = self.snapshot()?;
         snapshot.pin_format = pin_format;
         self.update(&snapshot)
@@ -287,7 +294,10 @@ impl TokenSmartCardPinAuthOperation {
         Ok(self.snapshot()?.apdu_template)
     }
 
-    pub fn set_apdu_template(&self, apdu_template: Option<Vec<u8>>) -> Result<(), CryptoTokenKitError> {
+    pub fn set_apdu_template(
+        &self,
+        apdu_template: Option<Vec<u8>>,
+    ) -> Result<(), CryptoTokenKitError> {
         let mut snapshot = self.snapshot()?;
         snapshot.apdu_template = apdu_template;
         self.update(&snapshot)
@@ -307,7 +317,10 @@ impl TokenSmartCardPinAuthOperation {
         Ok(self.snapshot()?.has_smart_card)
     }
 
-    pub fn set_smart_card(&self, smart_card: Option<&SmartCard>) -> Result<(), CryptoTokenKitError> {
+    pub fn set_smart_card(
+        &self,
+        smart_card: Option<&SmartCard>,
+    ) -> Result<(), CryptoTokenKitError> {
         let mut error_ptr = ptr::null_mut();
         let raw = smart_card.map_or(ptr::null_mut(), SmartCard::raw);
         let status = unsafe {

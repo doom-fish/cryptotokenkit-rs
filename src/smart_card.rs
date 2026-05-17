@@ -135,7 +135,9 @@ impl SmartCard {
     }
 
     pub fn set_allowed_protocols(&self, protocols: SmartCardProtocol) {
-        unsafe { ffi::smart_card::ctk_smart_card_set_allowed_protocols(self.raw, protocols.bits()) };
+        unsafe {
+            ffi::smart_card::ctk_smart_card_set_allowed_protocols(self.raw, protocols.bits())
+        };
     }
 
     #[must_use]
@@ -218,7 +220,8 @@ impl SmartCard {
 
     pub fn begin_session(&self) -> Result<(), CryptoTokenKitError> {
         let mut error_ptr = ptr::null_mut();
-        let status = unsafe { ffi::smart_card::ctk_smart_card_begin_session(self.raw, &mut error_ptr) };
+        let status =
+            unsafe { ffi::smart_card::ctk_smart_card_begin_session(self.raw, &mut error_ptr) };
         status_result(status, error_ptr)
     }
 

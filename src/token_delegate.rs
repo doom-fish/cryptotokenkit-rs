@@ -47,7 +47,10 @@ impl TokenKeyAlgorithm {
     pub fn supports_algorithm(&self, algorithm: &str) -> Result<bool, CryptoTokenKitError> {
         let algorithm = to_cstring(algorithm)?;
         Ok(unsafe {
-            ffi::token_delegate::ctk_token_key_algorithm_supports_algorithm(self.raw, algorithm.as_ptr())
+            ffi::token_delegate::ctk_token_key_algorithm_supports_algorithm(
+                self.raw,
+                algorithm.as_ptr(),
+            )
         })
     }
 }
@@ -77,7 +80,9 @@ impl TokenKeyExchangeParameters {
     }
 
     pub fn shared_info(&self) -> Result<Option<Vec<u8>>, CryptoTokenKitError> {
-        let ptr = unsafe { ffi::token_delegate::ctk_token_key_exchange_parameters_shared_info_json(self.raw) };
+        let ptr = unsafe {
+            ffi::token_delegate::ctk_token_key_exchange_parameters_shared_info_json(self.raw)
+        };
         decode_optional_json(ptr)
     }
 }
@@ -169,7 +174,9 @@ pub trait TokenSessionDelegate: Send {
         _key_object_id: &TokenObjectId,
         _algorithm: &TokenKeyAlgorithm,
     ) -> Result<Vec<u8>, CryptoTokenKitError> {
-        Err(not_implemented("token session delegate sign_data not implemented"))
+        Err(not_implemented(
+            "token session delegate sign_data not implemented",
+        ))
     }
 
     fn decrypt_data(
@@ -179,7 +186,9 @@ pub trait TokenSessionDelegate: Send {
         _key_object_id: &TokenObjectId,
         _algorithm: &TokenKeyAlgorithm,
     ) -> Result<Vec<u8>, CryptoTokenKitError> {
-        Err(not_implemented("token session delegate decrypt_data not implemented"))
+        Err(not_implemented(
+            "token session delegate decrypt_data not implemented",
+        ))
     }
 
     fn perform_key_exchange(
@@ -197,8 +206,13 @@ pub trait TokenSessionDelegate: Send {
 }
 
 pub trait TokenDelegate: Send {
-    fn create_session(&mut self, _token: &Token) -> Result<Option<TokenSession>, CryptoTokenKitError> {
-        Err(not_implemented("token delegate create_session not implemented"))
+    fn create_session(
+        &mut self,
+        _token: &Token,
+    ) -> Result<Option<TokenSession>, CryptoTokenKitError> {
+        Err(not_implemented(
+            "token delegate create_session not implemented",
+        ))
     }
 
     fn terminate_session(&mut self, _token: &Token, _session: &TokenSession) {}
@@ -291,7 +305,9 @@ fn c_string_to_string(ptr: *const c_char, missing: &str) -> Result<String, Crypt
     if ptr.is_null() {
         return Err(CryptoTokenKitError::InvalidArgument(missing.into()));
     }
-    Ok(unsafe { CStr::from_ptr(ptr) }.to_string_lossy().into_owned())
+    Ok(unsafe { CStr::from_ptr(ptr) }
+        .to_string_lossy()
+        .into_owned())
 }
 
 unsafe extern "C" fn token_session_begin_auth_trampoline(
@@ -313,21 +329,28 @@ unsafe extern "C" fn token_session_begin_auth_trampoline(
         let constraint = if constraint_json.is_null() {
             Value::Null
         } else {
-            serde_json::from_str::<Value>(&c_string_to_string(constraint_json, "invalid constraint JSON")?)
-                .map_err(|error| CryptoTokenKitError::InvalidArgument(format!(
+            serde_json::from_str::<Value>(&c_string_to_string(
+                constraint_json,
+                "invalid constraint JSON",
+            )?)
+            .map_err(|error| {
+                CryptoTokenKitError::InvalidArgument(format!(
                     "invalid token-session constraint JSON: {error}"
-                )))?
+                ))
+            })?
         };
         let mut delegate = match state.delegate.lock() {
             Ok(guard) => guard,
             Err(poisoned) => poisoned.into_inner(),
         };
         let operation = TokenOperation::from_raw(operation_raw);
-        let operation_handle = delegate.begin_auth_for_operation(&session, operation, &constraint)?;
+        let operation_handle =
+            delegate.begin_auth_for_operation(&session, operation, &constraint)?;
         drop(delegate);
         if !out_operation.is_null() {
             unsafe {
-                *out_operation = operation_handle.map_or(ptr::null_mut(), TokenAuthOperationHandle::into_raw);
+                *out_operation =
+                    operation_handle.map_or(ptr::null_mut(), TokenAuthOperationHandle::into_raw);
             }
         }
         Ok(ffi::status::OK)
@@ -338,7 +361,10 @@ unsafe extern "C" fn token_session_begin_auth_trampoline(
             error.code()
         }
         Err(_) => {
-            write_error_ptr(error_out, "panic in token-session begin-auth delegate callback");
+            write_error_ptr(
+                error_out,
+                "panic in token-session begin-auth delegate callback",
+            );
             ffi::status::FRAMEWORK_ERROR
         }
     }
@@ -351,15 +377,21 @@ unsafe extern "C" fn token_session_supports_trampoline(
     object_id_ptr: *const c_char,
     algorithm_raw: *mut c_void,
 ) -> bool {
-    if user_info.is_null() || session_raw.is_null() || object_id_ptr.is_null() || algorithm_raw.is_null() {
+    if user_info.is_null()
+        || session_raw.is_null()
+        || object_id_ptr.is_null()
+        || algorithm_raw.is_null()
+    {
         return false;
     }
 
     catch_unwind(AssertUnwindSafe(|| {
         let state = unsafe { &*user_info.cast::<TokenSessionDelegateState>() };
         let session = TokenSession::from_raw(session_raw);
-        let object_id = TokenObjectId(c_string_to_string(object_id_ptr, "missing token object identifier")
-            .unwrap_or_default());
+        let object_id = TokenObjectId(
+            c_string_to_string(object_id_ptr, "missing token object identifier")
+                .unwrap_or_default(),
+        );
         let algorithm = TokenKeyAlgorithm::from_raw(algorithm_raw);
         let mut delegate = match state.delegate.lock() {
             Ok(guard) => guard,
@@ -392,14 +424,20 @@ unsafe extern "C" fn token_session_data_trampoline(
         || object_id_ptr.is_null()
         || algorithm_raw.is_null()
     {
-        write_error_ptr(error_out, "missing token-session delegate callback arguments");
+        write_error_ptr(
+            error_out,
+            "missing token-session delegate callback arguments",
+        );
         return ffi::status::INVALID_ARGUMENT;
     }
 
     match catch_unwind(AssertUnwindSafe(|| -> Result<i32, CryptoTokenKitError> {
         let state = unsafe { &*user_info.cast::<TokenSessionDelegateState>() };
         let session = TokenSession::from_raw(session_raw);
-        let object_id = TokenObjectId(c_string_to_string(object_id_ptr, "missing token object identifier")?);
+        let object_id = TokenObjectId(c_string_to_string(
+            object_id_ptr,
+            "missing token object identifier",
+        )?);
         let algorithm = TokenKeyAlgorithm::from_raw(algorithm_raw);
         let data = unsafe { std::slice::from_raw_parts(data_ptr, data_len) };
         let mut delegate = match state.delegate.lock() {
@@ -498,14 +536,20 @@ unsafe extern "C" fn token_session_key_exchange_trampoline(
         || algorithm_raw.is_null()
         || parameters_raw.is_null()
     {
-        write_error_ptr(error_out, "missing token-session key-exchange callback arguments");
+        write_error_ptr(
+            error_out,
+            "missing token-session key-exchange callback arguments",
+        );
         return ffi::status::INVALID_ARGUMENT;
     }
 
     match catch_unwind(AssertUnwindSafe(|| -> Result<i32, CryptoTokenKitError> {
         let state = unsafe { &*user_info.cast::<TokenSessionDelegateState>() };
         let session = TokenSession::from_raw(session_raw);
-        let object_id = TokenObjectId(c_string_to_string(object_id_ptr, "missing token object identifier")?);
+        let object_id = TokenObjectId(c_string_to_string(
+            object_id_ptr,
+            "missing token object identifier",
+        )?);
         let algorithm = TokenKeyAlgorithm::from_raw(algorithm_raw);
         let parameters = TokenKeyExchangeParameters::from_raw(parameters_raw);
         let public_key = unsafe { std::slice::from_raw_parts(public_key_ptr, public_key_len) };
@@ -534,7 +578,10 @@ unsafe extern "C" fn token_session_key_exchange_trampoline(
             error.code()
         }
         Err(_) => {
-            write_error_ptr(error_out, "panic in token-session key-exchange delegate callback");
+            write_error_ptr(
+                error_out,
+                "panic in token-session key-exchange delegate callback",
+            );
             ffi::status::FRAMEWORK_ERROR
         }
     }
@@ -608,7 +655,10 @@ unsafe extern "C" fn token_driver_create_token_trampoline(
     error_out: *mut *mut c_char,
 ) -> i32 {
     if user_info.is_null() || driver_raw.is_null() || configuration_json.is_null() {
-        write_error_ptr(error_out, "missing token-driver delegate callback arguments");
+        write_error_ptr(
+            error_out,
+            "missing token-driver delegate callback arguments",
+        );
         return ffi::status::INVALID_ARGUMENT;
     }
 
@@ -643,7 +693,10 @@ unsafe extern "C" fn token_driver_create_token_trampoline(
             error.code()
         }
         Err(_) => {
-            write_error_ptr(error_out, "panic in token-driver create-token delegate callback");
+            write_error_ptr(
+                error_out,
+                "panic in token-driver create-token delegate callback",
+            );
             ffi::status::FRAMEWORK_ERROR
         }
     }
@@ -681,7 +734,10 @@ unsafe extern "C" fn smart_card_token_driver_create_token_trampoline(
     error_out: *mut *mut c_char,
 ) -> i32 {
     if user_info.is_null() || driver_raw.is_null() || smart_card_raw.is_null() {
-        write_error_ptr(error_out, "missing smart-card token-driver delegate callback arguments");
+        write_error_ptr(
+            error_out,
+            "missing smart-card token-driver delegate callback arguments",
+        );
         return ffi::status::INVALID_ARGUMENT;
     }
 
@@ -754,7 +810,10 @@ impl TokenSession {
         Ok(Token::from_raw(raw))
     }
 
-    pub fn set_delegate<D>(&self, delegate: D) -> Result<TokenSessionDelegateHandle, CryptoTokenKitError>
+    pub fn set_delegate<D>(
+        &self,
+        delegate: D,
+    ) -> Result<TokenSessionDelegateHandle, CryptoTokenKitError>
     where
         D: TokenSessionDelegate + 'static,
     {
@@ -932,7 +991,9 @@ impl TokenSession {
         let mut reply_ptr = ptr::null_mut();
         let mut error_ptr = ptr::null_mut();
         let (shared_info_ptr, shared_info_len, has_shared_info) = shared_info
-            .map_or((ptr::null(), 0, false), |bytes| (bytes.as_ptr(), bytes.len(), true));
+            .map_or((ptr::null(), 0, false), |bytes| {
+                (bytes.as_ptr(), bytes.len(), true)
+            });
         let status = unsafe {
             ffi::token_delegate::ctk_token_session_invoke_delegate_key_exchange(
                 self.raw(),
@@ -1008,7 +1069,9 @@ impl Token {
         unsafe { ffi::token_delegate::ctk_token_clear_delegate(self.raw()) };
     }
 
-    pub fn invoke_delegate_create_session(&self) -> Result<Option<TokenSession>, CryptoTokenKitError> {
+    pub fn invoke_delegate_create_session(
+        &self,
+    ) -> Result<Option<TokenSession>, CryptoTokenKitError> {
         let mut raw = ptr::null_mut();
         let mut error_ptr = ptr::null_mut();
         let status = unsafe {
@@ -1023,7 +1086,12 @@ impl Token {
     }
 
     pub fn invoke_delegate_terminate_session(&self, session: &TokenSession) {
-        unsafe { ffi::token_delegate::ctk_token_invoke_delegate_terminate_session(self.raw(), session.raw()) };
+        unsafe {
+            ffi::token_delegate::ctk_token_invoke_delegate_terminate_session(
+                self.raw(),
+                session.raw(),
+            )
+        };
     }
 }
 
@@ -1043,7 +1111,10 @@ impl TokenDriver {
             )
         };
         if ptr.is_null() {
-            return Err(crate::error::from_swift(ffi::status::FRAMEWORK_ERROR, error_ptr));
+            return Err(crate::error::from_swift(
+                ffi::status::FRAMEWORK_ERROR,
+                error_ptr,
+            ));
         }
         decode_json(ptr)
     }
@@ -1065,7 +1136,10 @@ impl TokenDriver {
         status_result(status, error_ptr)
     }
 
-    pub fn set_delegate<D>(&self, delegate: D) -> Result<TokenDriverDelegateHandle, CryptoTokenKitError>
+    pub fn set_delegate<D>(
+        &self,
+        delegate: D,
+    ) -> Result<TokenDriverDelegateHandle, CryptoTokenKitError>
     where
         D: TokenDriverDelegate + 'static,
     {
@@ -1125,7 +1199,12 @@ impl TokenDriver {
     }
 
     pub fn invoke_delegate_terminate_token(&self, token: &Token) {
-        unsafe { ffi::token_delegate::ctk_token_driver_invoke_delegate_terminate_token(self.raw(), token.raw()) };
+        unsafe {
+            ffi::token_delegate::ctk_token_driver_invoke_delegate_terminate_token(
+                self.raw(),
+                token.raw(),
+            )
+        };
     }
 }
 
@@ -1178,8 +1257,9 @@ impl SmartCardTokenDriver {
         smart_card: &SmartCard,
         aid: Option<&[u8]>,
     ) -> Result<Option<SmartCardToken>, CryptoTokenKitError> {
-        let (aid_ptr, aid_len, has_aid) = aid
-            .map_or((ptr::null(), 0, false), |bytes| (bytes.as_ptr(), bytes.len(), true));
+        let (aid_ptr, aid_len, has_aid) = aid.map_or((ptr::null(), 0, false), |bytes| {
+            (bytes.as_ptr(), bytes.len(), true)
+        });
         let mut raw = ptr::null_mut();
         let mut error_ptr = ptr::null_mut();
         let status = unsafe {

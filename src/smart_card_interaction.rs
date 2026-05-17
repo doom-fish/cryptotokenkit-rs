@@ -8,7 +8,9 @@ use crate::error::CryptoTokenKitError;
 use crate::ffi;
 use crate::private::{decode_optional_json, encode_json_cstring, status_result, to_cstring};
 use crate::scard_slot_manager::SmartCardSlot;
-use crate::smart_card::{SmartCard, SmartCardPinCompletion, SmartCardPinConfirmation, SmartCardPinFormat};
+use crate::smart_card::{
+    SmartCard, SmartCardPinCompletion, SmartCardPinConfirmation, SmartCardPinFormat,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(i32)]
@@ -115,11 +117,15 @@ impl SmartCardUserInteraction {
 
     #[must_use]
     pub fn has_delegate(&self) -> bool {
-        unsafe { ffi::smart_card_interaction::ctk_smart_card_user_interaction_has_delegate(self.raw) }
+        unsafe {
+            ffi::smart_card_interaction::ctk_smart_card_user_interaction_has_delegate(self.raw)
+        }
     }
 
     pub fn clear_delegate(&self) {
-        unsafe { ffi::smart_card_interaction::ctk_smart_card_user_interaction_clear_delegate(self.raw) };
+        unsafe {
+            ffi::smart_card_interaction::ctk_smart_card_user_interaction_clear_delegate(self.raw)
+        };
     }
 
     pub fn simulate_delegate_event(&self, event: SmartCardUserInteractionEvent) {
@@ -133,7 +139,9 @@ impl SmartCardUserInteraction {
 
     #[must_use]
     pub fn initial_timeout(&self) -> f64 {
-        unsafe { ffi::smart_card_interaction::ctk_smart_card_user_interaction_initial_timeout(self.raw) }
+        unsafe {
+            ffi::smart_card_interaction::ctk_smart_card_user_interaction_initial_timeout(self.raw)
+        }
     }
 
     pub fn set_initial_timeout(&self, timeout: f64) {
@@ -164,7 +172,10 @@ impl SmartCardUserInteraction {
     pub fn run(&self) -> Result<(), CryptoTokenKitError> {
         let mut error_ptr = ptr::null_mut();
         let status = unsafe {
-            ffi::smart_card_interaction::ctk_smart_card_user_interaction_run(self.raw, &mut error_ptr)
+            ffi::smart_card_interaction::ctk_smart_card_user_interaction_run(
+                self.raw,
+                &mut error_ptr,
+            )
         };
         status_result(status, error_ptr)
     }
@@ -263,7 +274,10 @@ impl SmartCardUserInteractionForPinOperation {
         Ok(crate::error::take_owned_c_string(ptr))
     }
 
-    pub fn set_locale_identifier(&self, identifier: Option<&str>) -> Result<(), CryptoTokenKitError> {
+    pub fn set_locale_identifier(
+        &self,
+        identifier: Option<&str>,
+    ) -> Result<(), CryptoTokenKitError> {
         let mut error_ptr = ptr::null_mut();
         let status = if let Some(identifier) = identifier {
             let identifier = to_cstring(identifier)?;
@@ -290,7 +304,9 @@ impl SmartCardUserInteractionForPinOperation {
 
     #[must_use]
     pub fn result_status_word(&self) -> u16 {
-        unsafe { ffi::smart_card_interaction::ctk_smart_card_pin_interaction_result_sw(self.inner.raw()) }
+        unsafe {
+            ffi::smart_card_interaction::ctk_smart_card_pin_interaction_result_sw(self.inner.raw())
+        }
     }
 
     pub fn result_data(&self) -> Result<Option<Vec<u8>>, CryptoTokenKitError> {
@@ -444,7 +460,8 @@ impl SmartCard {
 
     pub fn mock(slot_name: &str) -> Result<Self, CryptoTokenKitError> {
         let slot_name = to_cstring(slot_name)?;
-        let raw = unsafe { ffi::smart_card_interaction::ctk_mock_smart_card_new(slot_name.as_ptr()) };
+        let raw =
+            unsafe { ffi::smart_card_interaction::ctk_mock_smart_card_new(slot_name.as_ptr()) };
         if raw.is_null() {
             return Err(CryptoTokenKitError::FrameworkError(
                 "Swift bridge returned a null mock smart-card".into(),
@@ -472,9 +489,13 @@ impl SmartCard {
             )
         };
         if raw.is_null() && !error_ptr.is_null() {
-            return Err(crate::error::from_swift(ffi::status::FRAMEWORK_ERROR, error_ptr));
+            return Err(crate::error::from_swift(
+                ffi::status::FRAMEWORK_ERROR,
+                error_ptr,
+            ));
         }
-        Ok((!raw.is_null()).then(|| SmartCardUserInteractionForSecurePinVerification::from_raw(raw)))
+        Ok((!raw.is_null())
+            .then(|| SmartCardUserInteractionForSecurePinVerification::from_raw(raw)))
     }
 
     pub fn user_interaction_for_secure_pin_change(
@@ -498,7 +519,10 @@ impl SmartCard {
             )
         };
         if raw.is_null() && !error_ptr.is_null() {
-            return Err(crate::error::from_swift(ffi::status::FRAMEWORK_ERROR, error_ptr));
+            return Err(crate::error::from_swift(
+                ffi::status::FRAMEWORK_ERROR,
+                error_ptr,
+            ));
         }
         Ok((!raw.is_null()).then(|| SmartCardUserInteractionForSecurePinChange::from_raw(raw)))
     }

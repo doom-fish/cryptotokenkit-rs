@@ -36,7 +36,9 @@ pub fn decode_optional_json<T: DeserializeOwned>(
     decode_json(ptr).map(Some)
 }
 
-pub fn encode_json_cstring<T: Serialize + ?Sized>(value: &T) -> Result<CString, CryptoTokenKitError> {
+pub fn encode_json_cstring<T: Serialize + ?Sized>(
+    value: &T,
+) -> Result<CString, CryptoTokenKitError> {
     let json = serde_json::to_string(value).map_err(|error| {
         CryptoTokenKitError::FrameworkError(format!(
             "failed to encode bridge JSON payload: {error}"
@@ -45,7 +47,10 @@ pub fn encode_json_cstring<T: Serialize + ?Sized>(value: &T) -> Result<CString, 
     to_cstring(&json)
 }
 
-pub fn status_result(status: i32, error_ptr: *mut core::ffi::c_char) -> Result<(), CryptoTokenKitError> {
+pub fn status_result(
+    status: i32,
+    error_ptr: *mut core::ffi::c_char,
+) -> Result<(), CryptoTokenKitError> {
     if status == ffi::status::OK {
         Ok(())
     } else {

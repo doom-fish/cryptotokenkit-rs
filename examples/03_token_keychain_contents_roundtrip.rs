@@ -22,7 +22,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let resolved_key = token.key_for_object_id(&key.item.object_id)?;
     let resolved_certificate = token.certificate_for_object_id(&certificate.item.object_id)?;
-    println!("key: {} bits={}", resolved_key.item.object_id.0, resolved_key.key_size_in_bits);
+    println!(
+        "key: {} bits={}",
+        resolved_key.item.object_id.0, resolved_key.key_size_in_bits
+    );
     println!(
         "certificate: {} bytes={}",
         resolved_certificate.item.object_id.0,

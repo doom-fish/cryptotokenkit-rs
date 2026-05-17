@@ -11,8 +11,8 @@ fn keychain_entries_round_trip_through_token_configuration(
     let driver = TokenDriver::new();
     let token = Token::new(&driver, "com.example.cryptotokenkit.keychain-test")?;
 
-    let certificate = TokenKeychainCertificate::new("cert-1", SAMPLE_CERT_DER.to_vec())
-        .with_label("Certificate");
+    let certificate =
+        TokenKeychainCertificate::new("cert-1", SAMPLE_CERT_DER.to_vec()).with_label("Certificate");
     let key = TokenKeychainKey::new("key-1", RSA_KEY_TYPE)
         .with_label("Signing key")
         .with_key_size_in_bits(2048);

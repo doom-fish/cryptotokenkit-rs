@@ -5,7 +5,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::CryptoTokenKitError;
 use crate::ffi;
-use crate::private::{decode_json, decode_optional_json, encode_json_cstring, status_result, to_cstring};
+use crate::private::{
+    decode_json, decode_optional_json, encode_json_cstring, status_result, to_cstring,
+};
 use crate::smart_card::SmartCard;
 use crate::token_driver::{SmartCardTokenDriver, TokenDriver};
 use crate::token_keychain_contents::{
@@ -37,7 +39,10 @@ impl Token {
             ffi::token::ctk_token_new(driver.raw(), instance_id.as_ptr(), &mut error_ptr)
         };
         if raw.is_null() {
-            return Err(crate::error::from_swift(ffi::status::FRAMEWORK_ERROR, error_ptr));
+            return Err(crate::error::from_swift(
+                ffi::status::FRAMEWORK_ERROR,
+                error_ptr,
+            ));
         }
         Ok(Self { raw })
     }
@@ -62,7 +67,10 @@ impl Token {
         let mut error_ptr = ptr::null_mut();
         let ptr = unsafe { ffi::token::ctk_token_configuration_json(self.raw, &mut error_ptr) };
         if ptr.is_null() && !error_ptr.is_null() {
-            return Err(crate::error::from_swift(ffi::status::FRAMEWORK_ERROR, error_ptr));
+            return Err(crate::error::from_swift(
+                ffi::status::FRAMEWORK_ERROR,
+                error_ptr,
+            ));
         }
         if ptr.is_null() {
             return Err(CryptoTokenKitError::FrameworkError(
@@ -78,8 +86,9 @@ impl Token {
 
     pub fn set_configuration_data(&self, data: Option<&[u8]>) -> Result<(), CryptoTokenKitError> {
         let mut error_ptr = ptr::null_mut();
-        let (data_ptr, data_len, has_data) = data
-            .map_or((ptr::null(), 0, false), |bytes| (bytes.as_ptr(), bytes.len(), true));
+        let (data_ptr, data_len, has_data) = data.map_or((ptr::null(), 0, false), |bytes| {
+            (bytes.as_ptr(), bytes.len(), true)
+        });
         let status = unsafe {
             ffi::token::ctk_token_set_configuration_data(
                 self.raw,
@@ -115,10 +124,17 @@ impl Token {
         let object_id = to_cstring(&object_id.0)?;
         let mut error_ptr = ptr::null_mut();
         let ptr = unsafe {
-            ffi::token::ctk_token_key_for_object_id_json(self.raw, object_id.as_ptr(), &mut error_ptr)
+            ffi::token::ctk_token_key_for_object_id_json(
+                self.raw,
+                object_id.as_ptr(),
+                &mut error_ptr,
+            )
         };
         if ptr.is_null() {
-            return Err(crate::error::from_swift(ffi::status::FRAMEWORK_ERROR, error_ptr));
+            return Err(crate::error::from_swift(
+                ffi::status::FRAMEWORK_ERROR,
+                error_ptr,
+            ));
         }
         decode_json(ptr)
     }
@@ -137,18 +153,25 @@ impl Token {
             )
         };
         if ptr.is_null() {
-            return Err(crate::error::from_swift(ffi::status::FRAMEWORK_ERROR, error_ptr));
+            return Err(crate::error::from_swift(
+                ffi::status::FRAMEWORK_ERROR,
+                error_ptr,
+            ));
         }
         decode_json(ptr)
     }
 
-    pub fn keychain_contents_items(&self) -> Result<Option<Vec<TokenKeychainEntry>>, CryptoTokenKitError> {
+    pub fn keychain_contents_items(
+        &self,
+    ) -> Result<Option<Vec<TokenKeychainEntry>>, CryptoTokenKitError> {
         let mut error_ptr = ptr::null_mut();
-        let ptr = unsafe {
-            ffi::token::ctk_token_keychain_contents_items_json(self.raw, &mut error_ptr)
-        };
+        let ptr =
+            unsafe { ffi::token::ctk_token_keychain_contents_items_json(self.raw, &mut error_ptr) };
         if ptr.is_null() && !error_ptr.is_null() {
-            return Err(crate::error::from_swift(ffi::status::FRAMEWORK_ERROR, error_ptr));
+            return Err(crate::error::from_swift(
+                ffi::status::FRAMEWORK_ERROR,
+                error_ptr,
+            ));
         }
         decode_optional_json(ptr)
     }
@@ -162,8 +185,9 @@ impl SmartCardToken {
         driver: &SmartCardTokenDriver,
     ) -> Result<Self, CryptoTokenKitError> {
         let instance_id = to_cstring(instance_id)?;
-        let (aid_ptr, aid_len, has_aid) = aid
-            .map_or((ptr::null(), 0, false), |bytes| (bytes.as_ptr(), bytes.len(), true));
+        let (aid_ptr, aid_len, has_aid) = aid.map_or((ptr::null(), 0, false), |bytes| {
+            (bytes.as_ptr(), bytes.len(), true)
+        });
         let mut error_ptr = ptr::null_mut();
         let raw = unsafe {
             ffi::token::ctk_smart_card_token_new(
@@ -177,7 +201,10 @@ impl SmartCardToken {
             )
         };
         if raw.is_null() {
-            return Err(crate::error::from_swift(ffi::status::FRAMEWORK_ERROR, error_ptr));
+            return Err(crate::error::from_swift(
+                ffi::status::FRAMEWORK_ERROR,
+                error_ptr,
+            ));
         }
         Ok(Self { raw })
     }
@@ -207,7 +234,10 @@ impl SmartCardToken {
         let mut error_ptr = ptr::null_mut();
         let ptr = unsafe { ffi::token::ctk_token_configuration_json(self.raw, &mut error_ptr) };
         if ptr.is_null() && !error_ptr.is_null() {
-            return Err(crate::error::from_swift(ffi::status::FRAMEWORK_ERROR, error_ptr));
+            return Err(crate::error::from_swift(
+                ffi::status::FRAMEWORK_ERROR,
+                error_ptr,
+            ));
         }
         if ptr.is_null() {
             return Err(CryptoTokenKitError::FrameworkError(

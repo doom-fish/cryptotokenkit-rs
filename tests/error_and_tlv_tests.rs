@@ -1,9 +1,12 @@
-use cryptotokenkit::{TKErrorCode, TK_ERROR_DOMAIN, TlvEncoding, TlvRecord};
+use cryptotokenkit::{TKErrorCode, TlvEncoding, TlvRecord, TK_ERROR_DOMAIN};
 
 #[test]
 fn error_constants_and_tlv_helpers_work() {
     assert_eq!(TK_ERROR_DOMAIN, "CryptoTokenKit");
-    assert_eq!(TKErrorCode::try_from(-4).unwrap(), TKErrorCode::CanceledByUser);
+    assert_eq!(
+        TKErrorCode::try_from(-4).unwrap(),
+        TKErrorCode::CanceledByUser
+    );
 
     assert_eq!(TlvRecord::ber_tag_data(0x5F2D).unwrap(), vec![0x5F, 0x2D]);
 

@@ -2,9 +2,9 @@ use std::sync::{Arc, Mutex};
 
 use cryptotokenkit::{
     SmartCard, SmartCardToken, SmartCardTokenDriver, SmartCardTokenDriverDelegate, TKErrorCode,
-    TK_ERROR_DOMAIN, Token, TokenAuthOperationHandle, TokenConfigurationSnapshot, TokenDelegate,
-    TokenDriver, TokenDriverDelegate, TokenKeyExchangeParameters, TokenObjectId, TokenOperation,
-    TokenPasswordAuthOperation, TokenSession, TokenSessionDelegate,
+    Token, TokenAuthOperationHandle, TokenConfigurationSnapshot, TokenDelegate, TokenDriver,
+    TokenDriverDelegate, TokenKeyExchangeParameters, TokenObjectId, TokenOperation,
+    TokenPasswordAuthOperation, TokenSession, TokenSessionDelegate, TK_ERROR_DOMAIN,
 };
 use serde_json::{json, Value};
 
@@ -180,7 +180,11 @@ impl SmartCardTokenDriverDelegate for RecordingSmartCardDriverDelegate {
         smart_card: &SmartCard,
         aid: Option<&[u8]>,
     ) -> Result<Option<SmartCardToken>, cryptotokenkit::CryptoTokenKitError> {
-        self.state.lock().unwrap().aids.push(aid.map(ToOwned::to_owned));
+        self.state
+            .lock()
+            .unwrap()
+            .aids
+            .push(aid.map(ToOwned::to_owned));
         Ok(Some(SmartCardToken::new(
             smart_card,
             aid,
@@ -309,10 +313,7 @@ fn token_delegates_and_gap_fill_helpers_work() -> Result<(), Box<dyn std::error:
     let smart_card_token = smart_card_driver
         .invoke_delegate_create_token(&mock_smart_card, Some(&[0xA0, 0x00, 0x00, 0x01]))?
         .expect("delegate should create smart-card token");
-    assert_eq!(
-        smart_card_token.aid()?,
-        Some(vec![0xA0, 0x00, 0x00, 0x01])
-    );
+    assert_eq!(smart_card_token.aid()?, Some(vec![0xA0, 0x00, 0x00, 0x01]));
     smart_card_driver.invoke_delegate_terminate_token(&smart_card_token);
     drop(smart_card_handle);
     assert!(!smart_card_driver.has_delegate());
@@ -324,7 +325,10 @@ fn token_delegates_and_gap_fill_helpers_work() -> Result<(), Box<dyn std::error:
         assert_eq!(session_state.sign_payloads, vec![b"abc".to_vec()]);
         assert_eq!(session_state.decrypt_payloads, vec![b"cipher".to_vec()]);
         assert_eq!(session_state.key_exchange_requested_size, Some(32));
-        assert_eq!(session_state.key_exchange_shared_info, Some(vec![0xAA, 0xBB]));
+        assert_eq!(
+            session_state.key_exchange_shared_info,
+            Some(vec![0xAA, 0xBB])
+        );
         drop(session_state);
     }
 
@@ -337,14 +341,20 @@ fn token_delegates_and_gap_fill_helpers_work() -> Result<(), Box<dyn std::error:
 
     {
         let driver_state = driver_state.lock().unwrap();
-        assert_eq!(driver_state.created_for_instance_ids, vec!["driver-instance".to_string()]);
+        assert_eq!(
+            driver_state.created_for_instance_ids,
+            vec!["driver-instance".to_string()]
+        );
         assert_eq!(driver_state.terminated_tokens, 1);
         drop(driver_state);
     }
 
     {
         let smart_card_state = smart_card_state.lock().unwrap();
-        assert_eq!(smart_card_state.aids, vec![Some(vec![0xA0, 0x00, 0x00, 0x01])]);
+        assert_eq!(
+            smart_card_state.aids,
+            vec![Some(vec![0xA0, 0x00, 0x00, 0x01])]
+        );
         assert_eq!(smart_card_state.terminated_tokens, 1);
         drop(smart_card_state);
     }

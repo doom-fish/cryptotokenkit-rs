@@ -21,12 +21,12 @@
 pub mod error;
 pub mod ffi;
 pub mod keychain;
+mod private;
 pub mod scard_slot_manager;
 pub mod smart_card;
 pub mod smart_card_atr;
 pub mod smart_card_interaction;
 pub mod smartcard;
-mod private;
 pub mod token;
 pub mod token_delegate;
 pub mod token_driver;
@@ -40,9 +40,8 @@ pub use scard_slot_manager::{
     SmartCardSlotManager,
 };
 pub use smart_card::{
-    ApduResponse, SmartCard, SmartCardPinCharset, SmartCardPinCompletion,
-    SmartCardPinConfirmation, SmartCardPinEncoding, SmartCardPinFormat,
-    SmartCardPinJustification,
+    ApduResponse, SmartCard, SmartCardPinCharset, SmartCardPinCompletion, SmartCardPinConfirmation,
+    SmartCardPinEncoding, SmartCardPinFormat, SmartCardPinJustification,
 };
 pub use smart_card_atr::{
     SmartCardAtr, SmartCardAtrInterfaceGroup, SmartCardProtocol, TlvEncoding, TlvRecord,
@@ -94,10 +93,10 @@ pub mod prelude {
     };
     pub use crate::token::{SmartCardToken, Token, TokenConfigurationSnapshot};
     pub use crate::token_delegate::{
-        SmartCardTokenDriverDelegate, SmartCardTokenDriverDelegateHandle,
-        TokenAuthOperationHandle, TokenDelegate, TokenDelegateHandle, TokenDriverDelegate,
-        TokenDriverDelegateHandle, TokenKeyAlgorithm, TokenKeyExchangeParameters,
-        TokenSessionDelegate, TokenSessionDelegateHandle,
+        SmartCardTokenDriverDelegate, SmartCardTokenDriverDelegateHandle, TokenAuthOperationHandle,
+        TokenDelegate, TokenDelegateHandle, TokenDriverDelegate, TokenDriverDelegateHandle,
+        TokenKeyAlgorithm, TokenKeyExchangeParameters, TokenSessionDelegate,
+        TokenSessionDelegateHandle,
     };
     pub use crate::token_driver::{
         SmartCardTokenDriver, TokenDriver, TokenDriverConfigurationSnapshot,

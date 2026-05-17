@@ -21,10 +21,7 @@ unsafe extern "C" {
         has_json: bool,
         error_out: *mut *mut c_char,
     ) -> i32;
-    pub fn ctk_smart_card_begin_session(
-        card: *mut c_void,
-        error_out: *mut *mut c_char,
-    ) -> i32;
+    pub fn ctk_smart_card_begin_session(card: *mut c_void, error_out: *mut *mut c_char) -> i32;
     pub fn ctk_smart_card_transmit_request_json(
         card: *mut c_void,
         request_ptr: *const u8,

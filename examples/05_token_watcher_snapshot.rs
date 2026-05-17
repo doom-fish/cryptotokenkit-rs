@@ -17,8 +17,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let token_ids = watcher.token_ids()?;
     println!("visible tokens: {}", token_ids.len());
-    println!("insertion callbacks observed: {}", seen.lock().unwrap().len());
-    println!("removal callbacks observed: {}", removed.lock().unwrap().len());
+    println!(
+        "insertion callbacks observed: {}",
+        seen.lock().unwrap().len()
+    );
+    println!(
+        "removal callbacks observed: {}",
+        removed.lock().unwrap().len()
+    );
     println!("✅ token watcher snapshot OK");
     Ok(())
 }

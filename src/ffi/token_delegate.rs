@@ -11,9 +11,8 @@ pub type TokenSessionBeginAuthCallback = Option<
     ) -> i32,
 >;
 
-pub type TokenSessionSupportsCallback = Option<
-    unsafe extern "C" fn(*mut c_void, *mut c_void, i32, *const c_char, *mut c_void) -> bool,
->;
+pub type TokenSessionSupportsCallback =
+    Option<unsafe extern "C" fn(*mut c_void, *mut c_void, i32, *const c_char, *mut c_void) -> bool>;
 
 pub type TokenSessionDataCallback = Option<
     unsafe extern "C" fn(
@@ -188,7 +187,10 @@ unsafe extern "C" {
         out_token: *mut *mut c_void,
         error_out: *mut *mut c_char,
     ) -> i32;
-    pub fn ctk_token_driver_invoke_delegate_terminate_token(driver: *mut c_void, token: *mut c_void);
+    pub fn ctk_token_driver_invoke_delegate_terminate_token(
+        driver: *mut c_void,
+        token: *mut c_void,
+    );
 
     pub fn ctk_smart_card_token_driver_set_delegate(
         driver: *mut c_void,
@@ -221,6 +223,8 @@ unsafe extern "C" {
         algorithm_name: *const c_char,
     ) -> bool;
     pub fn ctk_token_key_exchange_parameters_requested_size(parameters: *mut c_void) -> isize;
-    pub fn ctk_token_key_exchange_parameters_shared_info_json(parameters: *mut c_void) -> *mut c_char;
+    pub fn ctk_token_key_exchange_parameters_shared_info_json(
+        parameters: *mut c_void,
+    ) -> *mut c_char;
     pub fn ctk_token_auth_operation_kind(operation: *mut c_void) -> i32;
 }
