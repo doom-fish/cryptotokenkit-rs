@@ -1090,7 +1090,7 @@ impl Token {
             ffi::token_delegate::ctk_token_invoke_delegate_terminate_session(
                 self.raw(),
                 session.raw(),
-            )
+            );
         };
     }
 }
@@ -1203,7 +1203,7 @@ impl TokenDriver {
             ffi::token_delegate::ctk_token_driver_invoke_delegate_terminate_token(
                 self.raw(),
                 token.raw(),
-            )
+            );
         };
     }
 }

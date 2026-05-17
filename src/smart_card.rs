@@ -136,7 +136,7 @@ impl SmartCard {
 
     pub fn set_allowed_protocols(&self, protocols: SmartCardProtocol) {
         unsafe {
-            ffi::smart_card::ctk_smart_card_set_allowed_protocols(self.raw, protocols.bits())
+            ffi::smart_card::ctk_smart_card_set_allowed_protocols(self.raw, protocols.bits());
         };
     }
 

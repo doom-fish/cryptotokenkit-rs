@@ -11,7 +11,7 @@ fn watcher_lists_tokens_and_triggers_callbacks() -> Result<(), Box<dyn std::erro
     let removed = Arc::new(Mutex::new(Vec::new()));
     let removed_clone = Arc::clone(&removed);
     watcher.add_removal_handler("missing-token", move |token_id| {
-        removed_clone.lock().unwrap().push(token_id)
+        removed_clone.lock().unwrap().push(token_id);
     })?;
 
     let token_ids = watcher.token_ids()?;

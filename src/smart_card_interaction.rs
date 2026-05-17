@@ -124,7 +124,7 @@ impl SmartCardUserInteraction {
 
     pub fn clear_delegate(&self) {
         unsafe {
-            ffi::smart_card_interaction::ctk_smart_card_user_interaction_clear_delegate(self.raw)
+            ffi::smart_card_interaction::ctk_smart_card_user_interaction_clear_delegate(self.raw);
         };
     }
 
