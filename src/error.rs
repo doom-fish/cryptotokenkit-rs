@@ -96,9 +96,11 @@ pub(crate) fn take_owned_c_string(ptr: *mut c_char) -> String {
         return String::new();
     }
 
+    // SAFETY: ptr is null-checked above and is expected to be a valid C string allocated by Swift.
     let string = unsafe { core::ffi::CStr::from_ptr(ptr) }
         .to_string_lossy()
         .into_owned();
+    // SAFETY: ptr is allocated by the Swift bridge and must be freed via libc::free().
     unsafe { free(ptr.cast()) };
     string
 }

@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.2] - 2025-01-10
+
+### Changed
+
+- Added SAFETY comments to all critical unsafe blocks in callback implementations and memory management to improve code clarity and auditability. This includes clarifications for C string conversion, pointer dereferencing in delegate callbacks, and object lifetime management in Drop implementations.
+
 ## [0.2.1] - 2026-05-16
 
 ### Added

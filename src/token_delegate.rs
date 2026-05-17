@@ -58,6 +58,8 @@ impl TokenKeyAlgorithm {
 impl Drop for TokenKeyAlgorithm {
     fn drop(&mut self) {
         if !self.raw.is_null() {
+            // SAFETY: raw is either null (skipped) or a valid CryptoTokenKit object pointer.
+            // It must be released via ctk_object_release exactly once per new() call.
             unsafe { ffi::ctk_object_release(self.raw) };
             self.raw = ptr::null_mut();
         }
@@ -90,6 +92,8 @@ impl TokenKeyExchangeParameters {
 impl Drop for TokenKeyExchangeParameters {
     fn drop(&mut self) {
         if !self.raw.is_null() {
+            // SAFETY: raw is either null (skipped) or a valid CryptoTokenKit object pointer.
+            // It must be released via ctk_object_release exactly once per new() call.
             unsafe { ffi::ctk_object_release(self.raw) };
             self.raw = ptr::null_mut();
         }
@@ -288,6 +292,8 @@ macro_rules! impl_delegate_handle_drop {
         impl Drop for $name {
             fn drop(&mut self) {
                 if !self.raw.is_null() {
+                    // SAFETY: raw is either null (skipped) or a valid CryptoTokenKit delegate handle pointer.
+                    // It must be released via ctk_object_release exactly once per creation.
                     unsafe { ffi::ctk_object_release(self.raw) };
                     self.raw = ptr::null_mut();
                 }
@@ -305,6 +311,7 @@ fn c_string_to_string(ptr: *const c_char, missing: &str) -> Result<String, Crypt
     if ptr.is_null() {
         return Err(CryptoTokenKitError::InvalidArgument(missing.into()));
     }
+    // SAFETY: ptr is null-checked above and is expected to be a valid C string from the CryptoTokenKit framework.
     Ok(unsafe { CStr::from_ptr(ptr) }
         .to_string_lossy()
         .into_owned())
@@ -324,6 +331,8 @@ unsafe extern "C" fn token_session_begin_auth_trampoline(
     }
 
     match catch_unwind(AssertUnwindSafe(|| -> Result<i32, CryptoTokenKitError> {
+        // SAFETY: user_info is null-checked above and is guaranteed to be a valid pointer to TokenSessionDelegateState
+        // because it was stored as Box::into_raw() in the delegate registration.
         let state = unsafe { &*user_info.cast::<TokenSessionDelegateState>() };
         let session = TokenSession::from_raw(session_raw);
         let constraint = if constraint_json.is_null() {
@@ -348,6 +357,7 @@ unsafe extern "C" fn token_session_begin_auth_trampoline(
             delegate.begin_auth_for_operation(&session, operation, &constraint)?;
         drop(delegate);
         if !out_operation.is_null() {
+            // SAFETY: out_operation is not null as checked, and writing a pointer value is safe.
             unsafe {
                 *out_operation =
                     operation_handle.map_or(ptr::null_mut(), TokenAuthOperationHandle::into_raw);
@@ -386,6 +396,7 @@ unsafe extern "C" fn token_session_supports_trampoline(
     }
 
     catch_unwind(AssertUnwindSafe(|| {
+        // SAFETY: user_info is null-checked above and is guaranteed to be valid TokenSessionDelegateState.
         let state = unsafe { &*user_info.cast::<TokenSessionDelegateState>() };
         let session = TokenSession::from_raw(session_raw);
         let object_id = TokenObjectId(
@@ -432,6 +443,7 @@ unsafe extern "C" fn token_session_data_trampoline(
     }
 
     match catch_unwind(AssertUnwindSafe(|| -> Result<i32, CryptoTokenKitError> {
+        // SAFETY: user_info is null-checked above and is guaranteed to be valid TokenSessionDelegateState.
         let state = unsafe { &*user_info.cast::<TokenSessionDelegateState>() };
         let session = TokenSession::from_raw(session_raw);
         let object_id = TokenObjectId(c_string_to_string(
@@ -439,6 +451,8 @@ unsafe extern "C" fn token_session_data_trampoline(
             "missing token object identifier",
         )?);
         let algorithm = TokenKeyAlgorithm::from_raw(algorithm_raw);
+        // SAFETY: data_ptr is null-checked above and data_len is provided by the CryptoTokenKit framework;
+        // the slice is immediately converted to a Vec and not retained beyond this function scope.
         let data = unsafe { std::slice::from_raw_parts(data_ptr, data_len) };
         let mut delegate = match state.delegate.lock() {
             Ok(guard) => guard,
