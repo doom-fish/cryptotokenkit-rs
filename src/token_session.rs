@@ -9,22 +9,27 @@ use crate::private::{decode_json, encode_json_cstring, status_result};
 use crate::smart_card::{SmartCard, SmartCardPinFormat};
 use crate::token::{SmartCardToken, Token};
 
+/// Wraps `TKTokenSession`.
 pub struct TokenSession {
     raw: *mut c_void,
 }
 
+/// Wraps `TKSmartCardTokenSession`.
 pub struct SmartCardTokenSession {
     raw: *mut c_void,
 }
 
+/// Wraps `TKTokenAuthOperation`.
 pub struct TokenAuthOperation {
     raw: *mut c_void,
 }
 
+/// Wraps `TKTokenPasswordAuthOperation`.
 pub struct TokenPasswordAuthOperation {
     raw: *mut c_void,
 }
 
+/// Wraps `TKTokenSmartCardPINAuthOperation`.
 pub struct TokenSmartCardPinAuthOperation {
     raw: *mut c_void,
 }
@@ -41,6 +46,7 @@ struct TokenSmartCardPinAuthOperationSnapshot {
 
 impl TokenSession {
     #[must_use]
+    /// Creates a new wrapper around `TKTokenSession`.
     pub fn new(token: &Token) -> Self {
         let raw = unsafe { ffi::token_session::ctk_token_session_new(token.raw()) };
         assert!(!raw.is_null(), "Swift bridge returned a null token session");
@@ -63,6 +69,7 @@ impl TokenSession {
         raw
     }
 
+    /// Returns the corresponding `TKTokenSession` value.
     pub fn token_instance_id(&self) -> Result<String, CryptoTokenKitError> {
         let ptr = unsafe { ffi::token_session::ctk_token_session_token_instance_id(self.raw) };
         if ptr.is_null() {
@@ -76,6 +83,7 @@ impl TokenSession {
 
 impl SmartCardTokenSession {
     #[must_use]
+    /// Creates a new wrapper around `TKSmartCardTokenSession`.
     pub fn new(token: &SmartCardToken) -> Self {
         let raw = unsafe { ffi::token_session::ctk_smart_card_token_session_new(token.raw()) };
         assert!(
@@ -85,6 +93,7 @@ impl SmartCardTokenSession {
         Self { raw }
     }
 
+    /// Returns the corresponding `TKSmartCardTokenSession` value.
     pub fn token_instance_id(&self) -> Result<String, CryptoTokenKitError> {
         let ptr = unsafe { ffi::token_session::ctk_token_session_token_instance_id(self.raw) };
         if ptr.is_null() {
@@ -95,11 +104,13 @@ impl SmartCardTokenSession {
         Ok(crate::error::take_owned_c_string(ptr))
     }
 
+    /// Returns the corresponding `TKSmartCardTokenSession` value.
     pub fn smart_card(&self) -> Option<SmartCard> {
         let raw = unsafe { ffi::token_session::ctk_smart_card_token_session_smart_card(self.raw) };
         (!raw.is_null()).then_some(SmartCard::from_raw(raw))
     }
 
+    /// Returns the corresponding `TKSmartCardTokenSession` value via the reply-based framework entry point.
     pub fn get_smart_card(&self) -> Result<Option<SmartCard>, CryptoTokenKitError> {
         let mut error_ptr = ptr::null_mut();
         let raw = unsafe {
@@ -120,6 +131,7 @@ impl SmartCardTokenSession {
 
 impl TokenAuthOperation {
     #[must_use]
+    /// Creates a new wrapper around `TKTokenAuthOperation`.
     pub fn new() -> Self {
         let raw = unsafe { ffi::token_session::ctk_token_auth_operation_new() };
         assert!(
@@ -140,6 +152,7 @@ impl TokenAuthOperation {
         raw
     }
 
+    /// Invokes the corresponding `TKTokenAuthOperation` operation.
     pub fn finish(&self) -> Result<(), CryptoTokenKitError> {
         let mut error_ptr = ptr::null_mut();
         let status = unsafe {
@@ -157,6 +170,7 @@ impl Default for TokenAuthOperation {
 
 impl TokenPasswordAuthOperation {
     #[must_use]
+    /// Creates a new wrapper around `TKTokenPasswordAuthOperation`.
     pub fn new() -> Self {
         let raw = unsafe { ffi::token_session::ctk_token_password_auth_operation_new() };
         assert!(
@@ -177,6 +191,7 @@ impl TokenPasswordAuthOperation {
         raw
     }
 
+    /// Wraps the corresponding `TKTokenPasswordAuthOperation` operation.
     pub fn password(&self) -> Result<Option<String>, CryptoTokenKitError> {
         let ptr =
             unsafe { ffi::token_session::ctk_token_password_auth_operation_password(self.raw) };
@@ -186,6 +201,7 @@ impl TokenPasswordAuthOperation {
         Ok(Some(crate::error::take_owned_c_string(ptr)))
     }
 
+    /// Sets the corresponding `TKTokenPasswordAuthOperation` value.
     pub fn set_password(&self, password: Option<&str>) -> Result<(), CryptoTokenKitError> {
         let mut error_ptr = ptr::null_mut();
         let (status, _storage) = if let Some(password) = password {
@@ -213,6 +229,7 @@ impl TokenPasswordAuthOperation {
         status_result(status, error_ptr)
     }
 
+    /// Invokes the corresponding `TKTokenPasswordAuthOperation` operation.
     pub fn finish(&self) -> Result<(), CryptoTokenKitError> {
         let mut error_ptr = ptr::null_mut();
         let status = unsafe {
@@ -230,6 +247,7 @@ impl Default for TokenPasswordAuthOperation {
 
 impl TokenSmartCardPinAuthOperation {
     #[must_use]
+    /// Creates a new wrapper around `TKTokenSmartCardPINAuthOperation`.
     pub fn new() -> Self {
         let raw = unsafe { ffi::token_session::ctk_token_smart_card_pin_auth_operation_new() };
         assert!(
@@ -277,10 +295,12 @@ impl TokenSmartCardPinAuthOperation {
         status_result(status, error_ptr)
     }
 
+    /// Wraps the corresponding `TKTokenSmartCardPINAuthOperation` operation.
     pub fn pin_format(&self) -> Result<SmartCardPinFormat, CryptoTokenKitError> {
         Ok(self.snapshot()?.pin_format)
     }
 
+    /// Sets the corresponding `TKTokenSmartCardPINAuthOperation` value.
     pub fn set_pin_format(
         &self,
         pin_format: SmartCardPinFormat,
@@ -290,10 +310,12 @@ impl TokenSmartCardPinAuthOperation {
         self.update(&snapshot)
     }
 
+    /// Wraps the corresponding `TKTokenSmartCardPINAuthOperation` operation.
     pub fn apdu_template(&self) -> Result<Option<Vec<u8>>, CryptoTokenKitError> {
         Ok(self.snapshot()?.apdu_template)
     }
 
+    /// Sets the corresponding `TKTokenSmartCardPINAuthOperation` value.
     pub fn set_apdu_template(
         &self,
         apdu_template: Option<Vec<u8>>,
@@ -303,20 +325,24 @@ impl TokenSmartCardPinAuthOperation {
         self.update(&snapshot)
     }
 
+    /// Wraps the corresponding `TKTokenSmartCardPINAuthOperation` operation.
     pub fn pin_byte_offset(&self) -> Result<i64, CryptoTokenKitError> {
         Ok(self.snapshot()?.pin_byte_offset)
     }
 
+    /// Sets the corresponding `TKTokenSmartCardPINAuthOperation` value.
     pub fn set_pin_byte_offset(&self, pin_byte_offset: i64) -> Result<(), CryptoTokenKitError> {
         let mut snapshot = self.snapshot()?;
         snapshot.pin_byte_offset = pin_byte_offset;
         self.update(&snapshot)
     }
 
+    /// Returns whether `TKTokenSmartCardPINAuthOperation` currently has the associated bridge state.
     pub fn has_smart_card(&self) -> Result<bool, CryptoTokenKitError> {
         Ok(self.snapshot()?.has_smart_card)
     }
 
+    /// Sets the corresponding `TKTokenSmartCardPINAuthOperation` value.
     pub fn set_smart_card(
         &self,
         smart_card: Option<&SmartCard>,
@@ -333,16 +359,19 @@ impl TokenSmartCardPinAuthOperation {
         status_result(status, error_ptr)
     }
 
+    /// Wraps the corresponding `TKTokenSmartCardPINAuthOperation` operation.
     pub fn pin(&self) -> Result<Option<String>, CryptoTokenKitError> {
         Ok(self.snapshot()?.pin)
     }
 
+    /// Sets the corresponding `TKTokenSmartCardPINAuthOperation` value.
     pub fn set_pin(&self, pin: Option<&str>) -> Result<(), CryptoTokenKitError> {
         let mut snapshot = self.snapshot()?;
         snapshot.pin = pin.map(str::to_owned);
         self.update(&snapshot)
     }
 
+    /// Invokes the corresponding `TKTokenSmartCardPINAuthOperation` operation.
     pub fn finish(&self) -> Result<(), CryptoTokenKitError> {
         let mut error_ptr = ptr::null_mut();
         let status = unsafe {

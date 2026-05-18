@@ -10,58 +10,88 @@ use crate::smart_card_atr::SmartCardProtocol;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+/// Result payload returned from `TKSmartCard.send(ins:p1:p2:data:le:)`.
 pub struct ApduResponse {
     #[serde(default, with = "serde_bytes")]
+    /// Serialized field bridged from `TKSmartCard.send(ins:p1:p2:data:le:)`.
     pub data: Vec<u8>,
+    /// Serialized field bridged from `TKSmartCard.send(ins:p1:p2:data:le:)`.
     pub status_word: u16,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[repr(i32)]
+/// Mirrors the character-set choices stored by `TKSmartCardPINFormat`.
 pub enum SmartCardPinCharset {
+    /// Variant bridged from `TKSmartCardPINFormat`.
     Numeric = 0,
+    /// Variant bridged from `TKSmartCardPINFormat`.
     Alphanumeric = 1,
+    /// Variant bridged from `TKSmartCardPINFormat`.
     UpperAlphanumeric = 2,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[repr(i32)]
+/// Mirrors the encoding choices stored by `TKSmartCardPINFormat`.
 pub enum SmartCardPinEncoding {
+    /// Variant bridged from `TKSmartCardPINFormat`.
     Binary = 0,
+    /// Variant bridged from `TKSmartCardPINFormat`.
     Ascii = 1,
+    /// Variant bridged from `TKSmartCardPINFormat`.
     Bcd = 2,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[repr(i32)]
+/// Mirrors the justification options stored by `TKSmartCardPINFormat`.
 pub enum SmartCardPinJustification {
+    /// Variant bridged from `TKSmartCardPINFormat`.
     Left = 0,
+    /// Variant bridged from `TKSmartCardPINFormat`.
     Right = 1,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SmartCardPinCompletion(pub u32);
+/// Wraps the completion flags used by `CryptoTokenKit` PIN interactions.
+pub struct SmartCardPinCompletion(
+    /// Serialized field bridged from `CryptoTokenKit PIN interaction flags`.
+    pub u32,
+);
 
 impl SmartCardPinCompletion {
+    /// Wraps the corresponding `CryptoTokenKit PIN interaction flags` operation.
     pub const MAX_LENGTH: Self = Self(1 << 0);
+    /// Wraps the corresponding `CryptoTokenKit PIN interaction flags` operation.
     pub const KEY: Self = Self(1 << 1);
+    /// Wraps the corresponding `CryptoTokenKit PIN interaction flags` operation.
     pub const TIMEOUT: Self = Self(1 << 2);
 
     #[must_use]
+    /// Wraps the corresponding `CryptoTokenKit PIN interaction flags` operation.
     pub const fn bits(self) -> u32 {
         self.0
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SmartCardPinConfirmation(pub u32);
+/// Wraps the confirmation flags used by `CryptoTokenKit` PIN-change interactions.
+pub struct SmartCardPinConfirmation(
+    /// Serialized field bridged from `CryptoTokenKit PIN change interaction flags`.
+    pub u32,
+);
 
 impl SmartCardPinConfirmation {
+    /// Wraps the corresponding `CryptoTokenKit PIN change interaction flags` operation.
     pub const NONE: Self = Self(0);
+    /// Wraps the corresponding `CryptoTokenKit PIN change interaction flags` operation.
     pub const NEW: Self = Self(1 << 0);
+    /// Wraps the corresponding `CryptoTokenKit PIN change interaction flags` operation.
     pub const CURRENT: Self = Self(1 << 1);
 
     #[must_use]
+    /// Wraps the corresponding `CryptoTokenKit PIN change interaction flags` operation.
     pub const fn bits(self) -> u32 {
         self.0
     }
@@ -69,15 +99,25 @@ impl SmartCardPinConfirmation {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+/// Snapshot of the `TKSmartCardPINFormat` configuration.
 pub struct SmartCardPinFormat {
+    /// Serialized field bridged from `TKSmartCardPINFormat`.
     pub charset: SmartCardPinCharset,
+    /// Serialized field bridged from `TKSmartCardPINFormat`.
     pub encoding: SmartCardPinEncoding,
+    /// Serialized field bridged from `TKSmartCardPINFormat`.
     pub min_pin_length: i64,
+    /// Serialized field bridged from `TKSmartCardPINFormat`.
     pub max_pin_length: i64,
+    /// Serialized field bridged from `TKSmartCardPINFormat`.
     pub pin_block_byte_length: i64,
+    /// Serialized field bridged from `TKSmartCardPINFormat`.
     pub pin_justification: SmartCardPinJustification,
+    /// Serialized field bridged from `TKSmartCardPINFormat`.
     pub pin_bit_offset: i64,
+    /// Serialized field bridged from `TKSmartCardPINFormat`.
     pub pin_length_bit_offset: i64,
+    /// Serialized field bridged from `TKSmartCardPINFormat`.
     pub pin_length_bit_size: i64,
 }
 
@@ -97,6 +137,7 @@ impl Default for SmartCardPinFormat {
     }
 }
 
+/// Wraps `TKSmartCard`.
 pub struct SmartCard {
     raw: *mut c_void,
 }
@@ -112,6 +153,7 @@ impl SmartCard {
         self.raw
     }
 
+    /// Wraps the corresponding `TKSmartCard` operation.
     pub fn slot_name(&self) -> Result<String, CryptoTokenKitError> {
         let ptr = unsafe { ffi::smart_card::ctk_smart_card_slot_name(self.raw) };
         if ptr.is_null() {
@@ -123,17 +165,20 @@ impl SmartCard {
     }
 
     #[must_use]
+    /// Wraps the corresponding `TKSmartCard` operation.
     pub fn valid(&self) -> bool {
         unsafe { ffi::smart_card::ctk_smart_card_valid(self.raw) }
     }
 
     #[must_use]
+    /// Wraps the corresponding `TKSmartCard` operation.
     pub fn allowed_protocols(&self) -> SmartCardProtocol {
         SmartCardProtocol::from_bits(unsafe {
             ffi::smart_card::ctk_smart_card_allowed_protocols(self.raw)
         })
     }
 
+    /// Sets the corresponding `TKSmartCard` value.
     pub fn set_allowed_protocols(&self, protocols: SmartCardProtocol) {
         unsafe {
             ffi::smart_card::ctk_smart_card_set_allowed_protocols(self.raw, protocols.bits());
@@ -141,6 +186,7 @@ impl SmartCard {
     }
 
     #[must_use]
+    /// Wraps the corresponding `TKSmartCard` operation.
     pub fn current_protocol(&self) -> SmartCardProtocol {
         SmartCardProtocol::from_bits(unsafe {
             ffi::smart_card::ctk_smart_card_current_protocol(self.raw)
@@ -148,41 +194,50 @@ impl SmartCard {
     }
 
     #[must_use]
+    /// Wraps the corresponding `TKSmartCard` operation.
     pub fn sensitive(&self) -> bool {
         unsafe { ffi::smart_card::ctk_smart_card_sensitive(self.raw) }
     }
 
+    /// Sets the corresponding `TKSmartCard` value.
     pub fn set_sensitive(&self, sensitive: bool) {
         unsafe { ffi::smart_card::ctk_smart_card_set_sensitive(self.raw, sensitive) };
     }
 
     #[must_use]
+    /// Wraps the corresponding `TKSmartCard` operation.
     pub fn cla(&self) -> u8 {
         unsafe { ffi::smart_card::ctk_smart_card_cla(self.raw) }
     }
 
+    /// Sets the corresponding `TKSmartCard` value.
     pub fn set_cla(&self, cla: u8) {
         unsafe { ffi::smart_card::ctk_smart_card_set_cla(self.raw, cla) };
     }
 
     #[must_use]
+    /// Wraps the corresponding `TKSmartCard` operation.
     pub fn use_extended_length(&self) -> bool {
         unsafe { ffi::smart_card::ctk_smart_card_use_extended_length(self.raw) }
     }
 
+    /// Sets the corresponding `TKSmartCard` value.
     pub fn set_use_extended_length(&self, enabled: bool) {
         unsafe { ffi::smart_card::ctk_smart_card_set_use_extended_length(self.raw, enabled) };
     }
 
     #[must_use]
+    /// Wraps the corresponding `TKSmartCard` operation.
     pub fn use_command_chaining(&self) -> bool {
         unsafe { ffi::smart_card::ctk_smart_card_use_command_chaining(self.raw) }
     }
 
+    /// Sets the corresponding `TKSmartCard` value.
     pub fn set_use_command_chaining(&self, enabled: bool) {
         unsafe { ffi::smart_card::ctk_smart_card_set_use_command_chaining(self.raw, enabled) };
     }
 
+    /// Wraps the corresponding `TKSmartCard` operation.
     pub fn context(&self) -> Result<Option<String>, CryptoTokenKitError> {
         let ptr = unsafe { ffi::smart_card::ctk_smart_card_context_json(self.raw) };
         if ptr.is_null() {
@@ -191,6 +246,7 @@ impl SmartCard {
         Ok(Some(crate::error::take_owned_c_string(ptr)))
     }
 
+    /// Sets the corresponding `TKSmartCard` value.
     pub fn set_context(&self, json: Option<&str>) -> Result<(), CryptoTokenKitError> {
         let mut error_ptr = ptr::null_mut();
         let (status, _storage) = if let Some(json) = json {
@@ -218,6 +274,7 @@ impl SmartCard {
         status_result(status, error_ptr)
     }
 
+    /// Invokes the corresponding `TKSmartCard` operation.
     pub fn begin_session(&self) -> Result<(), CryptoTokenKitError> {
         let mut error_ptr = ptr::null_mut();
         let status =
@@ -225,6 +282,7 @@ impl SmartCard {
         status_result(status, error_ptr)
     }
 
+    /// Wraps the corresponding `TKSmartCard` operation.
     pub fn transmit_request(&self, request: &[u8]) -> Result<Vec<u8>, CryptoTokenKitError> {
         let mut error_ptr = ptr::null_mut();
         let mut reply_ptr = ptr::null_mut();
@@ -246,10 +304,12 @@ impl SmartCard {
         decode_json(reply_ptr)
     }
 
+    /// Invokes the corresponding `TKSmartCard` operation.
     pub fn end_session(&self) {
         unsafe { ffi::smart_card::ctk_smart_card_end_session(self.raw) };
     }
 
+    /// Wraps the corresponding `TKSmartCard` operation.
     pub fn send_ins(
         &self,
         ins: u8,
@@ -285,6 +345,7 @@ impl SmartCard {
         decode_json(reply_ptr)
     }
 
+    /// Runs the corresponding `TKSmartCard` workflow around the provided callback.
     pub fn with_session<T>(
         &self,
         callback: impl FnOnce(&Self) -> Result<T, CryptoTokenKitError>,

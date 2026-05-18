@@ -5,24 +5,36 @@ use libc::free;
 
 use crate::ffi;
 
+/// Mirrors the `TKErrorDomain` string exported by the `CryptoTokenKit` framework.
 pub const TK_ERROR_DOMAIN: &str = "CryptoTokenKit";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(i32)]
+/// Mirrors the `TKError.Code` values reported by `CryptoTokenKit` APIs.
 pub enum TKErrorCode {
+    /// Variant bridged from `TKError.Code`.
     NotImplemented = -1,
+    /// Variant bridged from `TKError.Code`.
     CommunicationError = -2,
+    /// Variant bridged from `TKError.Code`.
     CorruptedData = -3,
+    /// Variant bridged from `TKError.Code`.
     CanceledByUser = -4,
+    /// Variant bridged from `TKError.Code`.
     AuthenticationFailed = -5,
+    /// Variant bridged from `TKError.Code`.
     ObjectNotFound = -6,
+    /// Variant bridged from `TKError.Code`.
     TokenNotFound = -7,
+    /// Variant bridged from `TKError.Code`.
     BadParameter = -8,
+    /// Variant bridged from `TKError.Code`.
     AuthenticationNeeded = -9,
 }
 
 impl TKErrorCode {
     #[must_use]
+    /// Wraps the corresponding `TKError.Code` operation.
     pub const fn from_raw(raw: i32) -> Option<Self> {
         match raw {
             -1 => Some(Self::NotImplemented),
@@ -49,15 +61,26 @@ impl TryFrom<i32> for TKErrorCode {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
+/// Safe error wrapper for failures surfaced by the `CryptoTokenKit` framework.
 pub enum CryptoTokenKitError {
+    /// Variant bridged from `CryptoTokenKit NSError`.
     InvalidArgument(String),
+    /// Variant bridged from `CryptoTokenKit NSError`.
     FrameworkError(String),
+    /// Variant bridged from `CryptoTokenKit NSError`.
     TimedOut(String),
-    Unknown { code: i32, message: String },
+    /// Variant bridged from `CryptoTokenKit NSError`.
+    Unknown {
+        /// Raw status code bridged from the framework error payload.
+        code: i32,
+        /// Human-readable message bridged from the framework error payload.
+        message: String,
+    },
 }
 
 impl CryptoTokenKitError {
     #[must_use]
+    /// Wraps the corresponding `CryptoTokenKit NSError` operation.
     pub const fn code(&self) -> i32 {
         match self {
             Self::InvalidArgument(_) => ffi::status::INVALID_ARGUMENT,
@@ -68,6 +91,7 @@ impl CryptoTokenKitError {
     }
 
     #[must_use]
+    /// Wraps the corresponding `CryptoTokenKit NSError` operation.
     pub fn message(&self) -> &str {
         match self {
             Self::InvalidArgument(message)
@@ -78,6 +102,7 @@ impl CryptoTokenKitError {
     }
 
     #[must_use]
+    /// Wraps the corresponding `CryptoTokenKit NSError` operation.
     pub fn framework_code(&self) -> Option<TKErrorCode> {
         TKErrorCode::from_raw(self.code())
     }

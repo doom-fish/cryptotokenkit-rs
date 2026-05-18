@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.3] - 2026-05-18
+
+### Changed
+
+- Added Rustdoc coverage across the public safe API, with `///` comments that point back to the corresponding CryptoTokenKit framework types and delegate entry points. The safe surface now reports 100.0% Rustdoc coverage in `cargo +nightly rustdoc --lib --all-features -- -Z unstable-options --show-coverage`.
+
 ## [0.2.2] - 2025-01-10
 
 ### Changed

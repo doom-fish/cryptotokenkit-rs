@@ -27,6 +27,7 @@ fn not_implemented(message: &str) -> CryptoTokenKitError {
     }
 }
 
+/// Wraps `TKTokenKeyAlgorithm`.
 pub struct TokenKeyAlgorithm {
     raw: *mut c_void,
 }
@@ -37,6 +38,7 @@ impl TokenKeyAlgorithm {
         Self { raw }
     }
 
+    /// Wraps the corresponding `TKTokenKeyAlgorithm` operation.
     pub fn is_algorithm(&self, algorithm: &str) -> Result<bool, CryptoTokenKitError> {
         let algorithm = to_cstring(algorithm)?;
         Ok(unsafe {
@@ -44,6 +46,7 @@ impl TokenKeyAlgorithm {
         })
     }
 
+    /// Wraps the corresponding `TKTokenKeyAlgorithm` operation.
     pub fn supports_algorithm(&self, algorithm: &str) -> Result<bool, CryptoTokenKitError> {
         let algorithm = to_cstring(algorithm)?;
         Ok(unsafe {
@@ -66,6 +69,7 @@ impl Drop for TokenKeyAlgorithm {
     }
 }
 
+/// Wraps `TKTokenKeyExchangeParameters`.
 pub struct TokenKeyExchangeParameters {
     raw: *mut c_void,
 }
@@ -77,10 +81,12 @@ impl TokenKeyExchangeParameters {
     }
 
     #[must_use]
+    /// Wraps the corresponding `TKTokenKeyExchangeParameters` operation.
     pub fn requested_size(&self) -> isize {
         unsafe { ffi::token_delegate::ctk_token_key_exchange_parameters_requested_size(self.raw) }
     }
 
+    /// Wraps the corresponding `TKTokenKeyExchangeParameters` operation.
     pub fn shared_info(&self) -> Result<Option<Vec<u8>>, CryptoTokenKitError> {
         let ptr = unsafe {
             ffi::token_delegate::ctk_token_key_exchange_parameters_shared_info_json(self.raw)
@@ -100,9 +106,13 @@ impl Drop for TokenKeyExchangeParameters {
     }
 }
 
+/// Enum wrapper over the `TKTokenAuthOperation` class cluster.
 pub enum TokenAuthOperationHandle {
+    /// Variant bridged from `TKTokenAuthOperation`.
     Base(TokenAuthOperation),
+    /// Variant bridged from `TKTokenAuthOperation`.
     Password(TokenPasswordAuthOperation),
+    /// Variant bridged from `TKTokenAuthOperation`.
     SmartCardPin(TokenSmartCardPinAuthOperation),
 }
 
@@ -124,6 +134,7 @@ impl TokenAuthOperationHandle {
         }
     }
 
+    /// Invokes the corresponding `TKTokenAuthOperation` operation.
     pub fn finish(&self) -> Result<(), CryptoTokenKitError> {
         match self {
             Self::Base(operation) => operation.finish(),
@@ -151,7 +162,9 @@ impl From<TokenSmartCardPinAuthOperation> for TokenAuthOperationHandle {
     }
 }
 
+/// Rust delegate bridge for `TKTokenSessionDelegate`.
 pub trait TokenSessionDelegate: Send {
+    /// Handles the corresponding `TKTokenSessionDelegate` callback.
     fn begin_auth_for_operation(
         &mut self,
         _session: &TokenSession,
@@ -161,6 +174,7 @@ pub trait TokenSessionDelegate: Send {
         Ok(None)
     }
 
+    /// Handles the corresponding `TKTokenSessionDelegate` callback.
     fn supports_operation(
         &mut self,
         _session: &TokenSession,
@@ -171,6 +185,7 @@ pub trait TokenSessionDelegate: Send {
         false
     }
 
+    /// Handles the corresponding `TKTokenSessionDelegate` callback.
     fn sign_data(
         &mut self,
         _session: &TokenSession,
@@ -183,6 +198,7 @@ pub trait TokenSessionDelegate: Send {
         ))
     }
 
+    /// Handles the corresponding `TKTokenSessionDelegate` callback.
     fn decrypt_data(
         &mut self,
         _session: &TokenSession,
@@ -195,6 +211,7 @@ pub trait TokenSessionDelegate: Send {
         ))
     }
 
+    /// Handles the corresponding `TKTokenSessionDelegate` callback.
     fn perform_key_exchange(
         &mut self,
         _session: &TokenSession,
@@ -209,7 +226,9 @@ pub trait TokenSessionDelegate: Send {
     }
 }
 
+/// Rust delegate bridge for `TKTokenDelegate`.
 pub trait TokenDelegate: Send {
+    /// Handles the corresponding `TKTokenDelegate` callback.
     fn create_session(
         &mut self,
         _token: &Token,
@@ -219,10 +238,13 @@ pub trait TokenDelegate: Send {
         ))
     }
 
+    /// Handles the corresponding `TKTokenDelegate` callback.
     fn terminate_session(&mut self, _token: &Token, _session: &TokenSession) {}
 }
 
+/// Rust delegate bridge for `TKTokenDriverDelegate`.
 pub trait TokenDriverDelegate: Send {
+    /// Handles the corresponding `TKTokenDriverDelegate` callback.
     fn token_for_configuration(
         &mut self,
         _driver: &TokenDriver,
@@ -233,10 +255,13 @@ pub trait TokenDriverDelegate: Send {
         ))
     }
 
+    /// Handles the corresponding `TKTokenDriverDelegate` callback.
     fn terminate_token(&mut self, _driver: &TokenDriver, _token: &Token) {}
 }
 
+/// Rust delegate bridge for `TKSmartCardTokenDriverDelegate`.
 pub trait SmartCardTokenDriverDelegate: Send {
+    /// Handles the corresponding `TKSmartCardTokenDriverDelegate` callback.
     fn create_token_for_smart_card(
         &mut self,
         _driver: &SmartCardTokenDriver,
@@ -248,6 +273,7 @@ pub trait SmartCardTokenDriverDelegate: Send {
         ))
     }
 
+    /// Handles the corresponding `TKSmartCardTokenDriverDelegate` callback.
     fn terminate_token(&mut self, _driver: &SmartCardTokenDriver, _token: &SmartCardToken) {}
 }
 
@@ -267,21 +293,25 @@ struct SmartCardTokenDriverDelegateState {
     delegate: Mutex<Box<dyn SmartCardTokenDriverDelegate>>,
 }
 
+/// Lifetime token for a bridged `TKTokenSessionDelegate` registration.
 pub struct TokenSessionDelegateHandle {
     raw: *mut c_void,
     _state: Box<TokenSessionDelegateState>,
 }
 
+/// Lifetime token for a bridged `TKTokenDelegate` registration.
 pub struct TokenDelegateHandle {
     raw: *mut c_void,
     _state: Box<TokenDelegateState>,
 }
 
+/// Lifetime token for a bridged `TKTokenDriverDelegate` registration.
 pub struct TokenDriverDelegateHandle {
     raw: *mut c_void,
     _state: Box<TokenDriverDelegateState>,
 }
 
+/// Lifetime token for a bridged `TKSmartCardTokenDriverDelegate` registration.
 pub struct SmartCardTokenDriverDelegateHandle {
     raw: *mut c_void,
     _state: Box<SmartCardTokenDriverDelegateState>,
@@ -814,6 +844,7 @@ unsafe extern "C" fn smart_card_token_driver_terminate_token_trampoline(
 }
 
 impl TokenSession {
+    /// Returns the corresponding `TKTokenSession` value.
     pub fn token(&self) -> Result<Token, CryptoTokenKitError> {
         let raw = unsafe { ffi::token_delegate::ctk_token_session_token(self.raw()) };
         if raw.is_null() {
@@ -824,6 +855,7 @@ impl TokenSession {
         Ok(Token::from_raw(raw))
     }
 
+    /// Sets the corresponding `TKTokenSession` value.
     pub fn set_delegate<D>(
         &self,
         delegate: D,
@@ -862,14 +894,17 @@ impl TokenSession {
     }
 
     #[must_use]
+    /// Returns whether `TKTokenSession` currently has the associated bridge state.
     pub fn has_delegate(&self) -> bool {
         unsafe { ffi::token_delegate::ctk_token_session_has_delegate(self.raw()) }
     }
 
+    /// Clears the corresponding `TKTokenSession` bridge state.
     pub fn clear_delegate(&self) {
         unsafe { ffi::token_delegate::ctk_token_session_clear_delegate(self.raw()) };
     }
 
+    /// Invokes the bridged `TKTokenSession` delegate callback.
     pub fn invoke_delegate_begin_auth(
         &self,
         operation: TokenOperation,
@@ -891,6 +926,7 @@ impl TokenSession {
         Ok((!raw.is_null()).then(|| TokenAuthOperationHandle::from_raw(raw)))
     }
 
+    /// Invokes the bridged `TKTokenSession` delegate callback.
     pub fn invoke_delegate_supports_operation(
         &self,
         operation: TokenOperation,
@@ -956,6 +992,7 @@ impl TokenSession {
         decode_json(reply_ptr)
     }
 
+    /// Invokes the bridged `TKTokenSession` delegate callback.
     pub fn invoke_delegate_sign_data(
         &self,
         data: &[u8],
@@ -973,6 +1010,7 @@ impl TokenSession {
         )
     }
 
+    /// Invokes the bridged `TKTokenSession` delegate callback.
     pub fn invoke_delegate_decrypt_data(
         &self,
         ciphertext: &[u8],
@@ -990,6 +1028,7 @@ impl TokenSession {
         )
     }
 
+    /// Invokes the bridged `TKTokenSession` delegate callback.
     pub fn invoke_delegate_perform_key_exchange(
         &self,
         other_party_public_key_data: &[u8],
@@ -1033,6 +1072,7 @@ impl TokenSession {
 }
 
 impl Token {
+    /// Returns the corresponding `TKToken` value.
     pub fn token_driver(&self) -> Result<TokenDriver, CryptoTokenKitError> {
         let raw = unsafe { ffi::token_delegate::ctk_token_token_driver(self.raw()) };
         if raw.is_null() {
@@ -1043,6 +1083,7 @@ impl Token {
         Ok(TokenDriver::from_raw(raw))
     }
 
+    /// Sets the corresponding `TKToken` value.
     pub fn set_delegate<D>(&self, delegate: D) -> Result<TokenDelegateHandle, CryptoTokenKitError>
     where
         D: TokenDelegate + 'static,
@@ -1075,14 +1116,17 @@ impl Token {
     }
 
     #[must_use]
+    /// Returns whether `TKToken` currently has the associated bridge state.
     pub fn has_delegate(&self) -> bool {
         unsafe { ffi::token_delegate::ctk_token_has_delegate(self.raw()) }
     }
 
+    /// Clears the corresponding `TKToken` bridge state.
     pub fn clear_delegate(&self) {
         unsafe { ffi::token_delegate::ctk_token_clear_delegate(self.raw()) };
     }
 
+    /// Invokes the bridged `TKToken` delegate callback.
     pub fn invoke_delegate_create_session(
         &self,
     ) -> Result<Option<TokenSession>, CryptoTokenKitError> {
@@ -1099,6 +1143,7 @@ impl Token {
         Ok((!raw.is_null()).then(|| TokenSession::from_raw(raw)))
     }
 
+    /// Invokes the bridged `TKToken` delegate callback.
     pub fn invoke_delegate_terminate_session(&self, session: &TokenSession) {
         unsafe {
             ffi::token_delegate::ctk_token_invoke_delegate_terminate_session(
@@ -1110,6 +1155,7 @@ impl Token {
 }
 
 impl TokenDriver {
+    /// Registers the corresponding `TKTokenDriver` callback.
     pub fn add_token_configuration(
         class_id: &str,
         instance_id: &str,
@@ -1133,6 +1179,7 @@ impl TokenDriver {
         decode_json(ptr)
     }
 
+    /// Wraps the corresponding `TKTokenDriver` operation.
     pub fn remove_token_configuration(
         class_id: &str,
         instance_id: &str,
@@ -1150,6 +1197,7 @@ impl TokenDriver {
         status_result(status, error_ptr)
     }
 
+    /// Sets the corresponding `TKTokenDriver` value.
     pub fn set_delegate<D>(
         &self,
         delegate: D,
@@ -1185,14 +1233,17 @@ impl TokenDriver {
     }
 
     #[must_use]
+    /// Returns whether `TKTokenDriver` currently has the associated bridge state.
     pub fn has_delegate(&self) -> bool {
         unsafe { ffi::token_delegate::ctk_token_driver_has_delegate(self.raw()) }
     }
 
+    /// Clears the corresponding `TKTokenDriver` bridge state.
     pub fn clear_delegate(&self) {
         unsafe { ffi::token_delegate::ctk_token_driver_clear_delegate(self.raw()) };
     }
 
+    /// Invokes the bridged `TKTokenDriver` delegate callback.
     pub fn invoke_delegate_token_for_configuration(
         &self,
         configuration: &TokenConfigurationSnapshot,
@@ -1212,6 +1263,7 @@ impl TokenDriver {
         Ok((!raw.is_null()).then(|| Token::from_raw(raw)))
     }
 
+    /// Invokes the bridged `TKTokenDriver` delegate callback.
     pub fn invoke_delegate_terminate_token(&self, token: &Token) {
         unsafe {
             ffi::token_delegate::ctk_token_driver_invoke_delegate_terminate_token(
@@ -1223,6 +1275,7 @@ impl TokenDriver {
 }
 
 impl SmartCardTokenDriver {
+    /// Sets the corresponding `TKSmartCardTokenDriver` value.
     pub fn set_delegate<D>(
         &self,
         delegate: D,
@@ -1258,14 +1311,17 @@ impl SmartCardTokenDriver {
     }
 
     #[must_use]
+    /// Returns whether `TKSmartCardTokenDriver` currently has the associated bridge state.
     pub fn has_delegate(&self) -> bool {
         unsafe { ffi::token_delegate::ctk_token_driver_has_delegate(self.raw()) }
     }
 
+    /// Clears the corresponding `TKSmartCardTokenDriver` bridge state.
     pub fn clear_delegate(&self) {
         unsafe { ffi::token_delegate::ctk_token_driver_clear_delegate(self.raw()) };
     }
 
+    /// Invokes the bridged `TKSmartCardTokenDriver` delegate callback.
     pub fn invoke_delegate_create_token(
         &self,
         smart_card: &SmartCard,
@@ -1291,6 +1347,7 @@ impl SmartCardTokenDriver {
         Ok((!raw.is_null()).then(|| SmartCardToken::from_raw(raw)))
     }
 
+    /// Invokes the bridged `TKSmartCardTokenDriver` delegate callback.
     pub fn invoke_delegate_terminate_token(&self, token: &SmartCardToken) {
         unsafe {
             ffi::token_delegate::ctk_smart_card_token_driver_invoke_delegate_terminate_token(

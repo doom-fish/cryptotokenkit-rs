@@ -18,20 +18,34 @@
     clippy::unsafe_derive_deserialize
 )]
 
+/// Error-domain and status-code wrappers for `CryptoTokenKit` failures.
 pub mod error;
+#[doc(hidden)]
 pub mod ffi;
+/// Compatibility re-exports for `TKTokenKeychainContents` model wrappers.
 pub mod keychain;
 mod private;
+/// Wrappers for `TKSmartCardSlotManager` and `TKSmartCardSlot`.
 pub mod scard_slot_manager;
+/// Wrappers for `TKSmartCard` and related PIN-format types.
 pub mod smart_card;
+/// Wrappers for `TKSmartCardATR`, `TKSmartCardProtocol`, and TLV helpers.
 pub mod smart_card_atr;
+/// Wrappers for `TKSmartCardUserInteraction` and secure-PIN subclasses.
 pub mod smart_card_interaction;
+/// Compatibility re-exports for the `TKSmartCard*` wrapper modules.
 pub mod smartcard;
+/// Wrappers for `TKToken` and `TKSmartCardToken`.
 pub mod token;
+/// Delegate bridges for `TKTokenSessionDelegate`, `TKTokenDelegate`, and driver delegates.
 pub mod token_delegate;
+/// Wrappers for `TKTokenDriver` and `TKSmartCardTokenDriver`.
 pub mod token_driver;
+/// Snapshot models for `TKTokenKeychainContents`.
 pub mod token_keychain_contents;
+/// Wrappers for `TKTokenSession` and auth-operation types.
 pub mod token_session;
+/// Wrappers for `TKTokenWatcher`.
 pub mod token_watcher;
 
 pub use error::{CryptoTokenKitError, TKErrorCode, TK_ERROR_DOMAIN};

@@ -11,27 +11,34 @@ use crate::token::TokenConfigurationSnapshot;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+/// Snapshot of a `TKTokenDriver.Configuration` entry.
 pub struct TokenDriverConfigurationSnapshot {
+    /// Serialized field bridged from `TKTokenDriver.Configuration`.
     pub class_id: String,
+    /// Serialized field bridged from `TKTokenDriver.Configuration`.
     pub token_configurations: BTreeMap<String, TokenConfigurationSnapshot>,
 }
 
+/// Wraps `TKTokenDriver`.
 pub struct TokenDriver {
     raw: *mut c_void,
 }
 
+/// Wraps `TKSmartCardTokenDriver`.
 pub struct SmartCardTokenDriver {
     raw: *mut c_void,
 }
 
 impl TokenDriver {
     #[must_use]
+    /// Creates a new wrapper around `TKTokenDriver`.
     pub fn new() -> Self {
         let raw = unsafe { ffi::token_driver::ctk_token_driver_new() };
         assert!(!raw.is_null(), "Swift bridge returned a null token driver");
         Self { raw }
     }
 
+    /// Wraps the corresponding `TKTokenDriver` operation.
     pub fn driver_configurations(
     ) -> Result<BTreeMap<String, TokenDriverConfigurationSnapshot>, CryptoTokenKitError> {
         let ptr = unsafe { ffi::token_driver::ctk_driver_configurations_json() };
@@ -60,6 +67,7 @@ impl Default for TokenDriver {
 
 impl SmartCardTokenDriver {
     #[must_use]
+    /// Creates a new wrapper around `TKSmartCardTokenDriver`.
     pub fn new() -> Self {
         let raw = unsafe { ffi::token_driver::ctk_smart_card_token_driver_new() };
         assert!(

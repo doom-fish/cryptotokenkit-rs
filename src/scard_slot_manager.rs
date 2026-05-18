@@ -13,16 +13,23 @@ use crate::smart_card_atr::SmartCardAtr;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[repr(i32)]
+/// Mirrors the `TKSmartCardSlot.State` values reported by `CryptoTokenKit`.
 pub enum SlotState {
+    /// Variant bridged from `TKSmartCardSlot.State`.
     Missing = 0,
+    /// Variant bridged from `TKSmartCardSlot.State`.
     Empty = 1,
+    /// Variant bridged from `TKSmartCardSlot.State`.
     Probing = 2,
+    /// Variant bridged from `TKSmartCardSlot.State`.
     MuteCard = 3,
+    /// Variant bridged from `TKSmartCardSlot.State`.
     ValidCard = 4,
 }
 
 impl SlotState {
     #[must_use]
+    /// Wraps the corresponding `TKSmartCardSlot.State` operation.
     pub const fn from_raw(raw: i32) -> Self {
         match raw {
             1 => Self::Empty,
@@ -34,7 +41,9 @@ impl SlotState {
     }
 }
 
+/// Rust callback bridge for observing `TKSmartCardSlot.state` changes.
 pub trait SlotStateDelegate: Send {
+    /// Handles the corresponding `TKSmartCardSlot.state` callback.
     fn did_change_state(&mut self, state: SlotState) {
         let _ = state;
     }
@@ -42,17 +51,20 @@ pub trait SlotStateDelegate: Send {
 
 type StateHandler = Box<dyn FnMut(SlotState) + Send + 'static>;
 
+/// Closure-backed adapter for `TKSmartCardSlot.state` observation callbacks.
 pub struct SlotStateCallbacks {
     state: Option<StateHandler>,
 }
 
 impl SlotStateCallbacks {
     #[must_use]
+    /// Creates a new wrapper around `TKSmartCardSlot.state`.
     pub fn new() -> Self {
         Self { state: None }
     }
 
     #[must_use]
+    /// Wraps the corresponding `TKSmartCardSlot.state` operation.
     pub fn on_state_change(mut self, callback: impl FnMut(SlotState) + Send + 'static) -> Self {
         self.state = Some(Box::new(callback));
         self
@@ -77,15 +89,18 @@ struct CallbackState {
     delegate: Mutex<Box<dyn SlotStateDelegate>>,
 }
 
+/// Lifetime token for a bridged `TKSmartCardSlot.state` observer.
 pub struct SlotStateObserver {
     raw: *mut c_void,
     _callback_state: Box<CallbackState>,
 }
 
+/// Wraps `TKSmartCardSlotManager`.
 pub struct SmartCardSlotManager {
     raw: *mut c_void,
 }
 
+/// Wraps `TKSmartCardSlot`.
 pub struct SmartCardSlot {
     raw: *mut c_void,
 }
@@ -114,11 +129,13 @@ unsafe extern "C" fn slot_state_trampoline(user_info: *mut c_void, raw_state: i3
 
 impl SmartCardSlotManager {
     #[must_use]
+    /// Wraps the corresponding `TKSmartCardSlotManager` operation.
     pub fn default_manager() -> Option<Self> {
         let raw = unsafe { ffi::scard_slot_manager::ctk_slot_manager_default() };
         (!raw.is_null()).then_some(Self { raw })
     }
 
+    /// Wraps the corresponding `TKSmartCardSlotManager` operation.
     pub fn slot_names(&self) -> Result<Vec<String>, CryptoTokenKitError> {
         let mut error_ptr = ptr::null_mut();
         let json = unsafe {
@@ -133,10 +150,12 @@ impl SmartCardSlotManager {
         decode_json(json)
     }
 
+    /// Wraps the corresponding `TKSmartCardSlotManager` operation.
     pub fn slot_named(&self, name: &str) -> Result<Option<SmartCardSlot>, CryptoTokenKitError> {
         self.get_slot_impl(name, false)
     }
 
+    /// Returns the corresponding `TKSmartCardSlotManager` value via the reply-based framework entry point.
     pub fn get_slot_with_name(
         &self,
         name: &str,
@@ -175,6 +194,7 @@ impl SmartCardSlotManager {
 }
 
 impl SmartCardSlot {
+    /// Wraps the corresponding `TKSmartCardSlot` operation.
     pub fn name(&self) -> Result<String, CryptoTokenKitError> {
         let ptr = unsafe { ffi::scard_slot_manager::ctk_slot_name(self.raw) };
         if ptr.is_null() {
@@ -186,31 +206,37 @@ impl SmartCardSlot {
     }
 
     #[must_use]
+    /// Wraps the corresponding `TKSmartCardSlot` operation.
     pub fn max_input_length(&self) -> isize {
         unsafe { ffi::scard_slot_manager::ctk_slot_max_input_length(self.raw) }
     }
 
     #[must_use]
+    /// Wraps the corresponding `TKSmartCardSlot` operation.
     pub fn max_output_length(&self) -> isize {
         unsafe { ffi::scard_slot_manager::ctk_slot_max_output_length(self.raw) }
     }
 
     #[must_use]
+    /// Wraps the corresponding `TKSmartCardSlot` operation.
     pub fn state(&self) -> SlotState {
         SlotState::from_raw(unsafe { ffi::scard_slot_manager::ctk_slot_state(self.raw) })
     }
 
+    /// Wraps the corresponding `TKSmartCardSlot` operation.
     pub fn atr(&self) -> Result<Option<SmartCardAtr>, CryptoTokenKitError> {
         let ptr = unsafe { ffi::scard_slot_manager::ctk_slot_atr_json(self.raw) };
         decode_optional_json(ptr)
     }
 
     #[must_use]
+    /// Creates a value by calling the corresponding `TKSmartCardSlot` operation.
     pub fn make_smart_card(&self) -> Option<SmartCard> {
         let raw = unsafe { ffi::scard_slot_manager::ctk_slot_make_smart_card(self.raw) };
         (!raw.is_null()).then_some(SmartCard::from_raw(raw))
     }
 
+    /// Starts observing the corresponding `TKSmartCardSlot` state changes.
     pub fn observe_state<D>(&self, delegate: D) -> Result<SlotStateObserver, CryptoTokenKitError>
     where
         D: SlotStateDelegate + 'static,

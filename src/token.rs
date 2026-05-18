@@ -16,22 +16,30 @@ use crate::token_keychain_contents::{
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+/// Snapshot of `TKToken.Configuration` bridged into Rust.
 pub struct TokenConfigurationSnapshot {
+    /// Serialized field bridged from `TKToken.Configuration`.
     pub instance_id: String,
+    /// Serialized field bridged from `TKToken.Configuration`.
     pub configuration_data: Option<Vec<u8>>,
+    /// Serialized field bridged from `TKToken.Configuration`.
     pub keychain_items: Vec<TokenKeychainEntry>,
+    /// Serialized field bridged from `TKToken.Configuration`.
     pub keychain_contents_items: Option<Vec<TokenKeychainEntry>>,
 }
 
+/// Wraps `TKToken`.
 pub struct Token {
     raw: *mut c_void,
 }
 
+/// Wraps `TKSmartCardToken`.
 pub struct SmartCardToken {
     raw: *mut c_void,
 }
 
 impl Token {
+    /// Creates a new wrapper around `TKToken`.
     pub fn new(driver: &TokenDriver, instance_id: &str) -> Result<Self, CryptoTokenKitError> {
         let instance_id = to_cstring(instance_id)?;
         let mut error_ptr = ptr::null_mut();
@@ -63,6 +71,7 @@ impl Token {
         raw
     }
 
+    /// Returns the corresponding `TKToken` value.
     pub fn configuration(&self) -> Result<TokenConfigurationSnapshot, CryptoTokenKitError> {
         let mut error_ptr = ptr::null_mut();
         let ptr = unsafe { ffi::token::ctk_token_configuration_json(self.raw, &mut error_ptr) };
@@ -80,10 +89,12 @@ impl Token {
         decode_json(ptr)
     }
 
+    /// Wraps the corresponding `TKToken` operation.
     pub fn instance_id(&self) -> Result<String, CryptoTokenKitError> {
         Ok(self.configuration()?.instance_id)
     }
 
+    /// Sets the corresponding `TKToken` value.
     pub fn set_configuration_data(&self, data: Option<&[u8]>) -> Result<(), CryptoTokenKitError> {
         let mut error_ptr = ptr::null_mut();
         let (data_ptr, data_len, has_data) = data.map_or((ptr::null(), 0, false), |bytes| {
@@ -101,6 +112,7 @@ impl Token {
         status_result(status, error_ptr)
     }
 
+    /// Sets the corresponding `TKToken` value.
     pub fn set_keychain_items(
         &self,
         items: &[TokenKeychainEntry],
@@ -117,6 +129,7 @@ impl Token {
         status_result(status, error_ptr)
     }
 
+    /// Wraps the corresponding `TKToken` operation.
     pub fn key_for_object_id(
         &self,
         object_id: &TokenObjectId,
@@ -139,6 +152,7 @@ impl Token {
         decode_json(ptr)
     }
 
+    /// Wraps the corresponding `TKToken` operation.
     pub fn certificate_for_object_id(
         &self,
         object_id: &TokenObjectId,
@@ -161,6 +175,7 @@ impl Token {
         decode_json(ptr)
     }
 
+    /// Wraps the corresponding `TKToken` operation.
     pub fn keychain_contents_items(
         &self,
     ) -> Result<Option<Vec<TokenKeychainEntry>>, CryptoTokenKitError> {
@@ -178,6 +193,7 @@ impl Token {
 }
 
 impl SmartCardToken {
+    /// Creates a new wrapper around `TKSmartCardToken`.
     pub fn new(
         smart_card: &SmartCard,
         aid: Option<&[u8]>,
@@ -225,11 +241,13 @@ impl SmartCardToken {
         raw
     }
 
+    /// Returns the corresponding `TKSmartCardToken` value.
     pub fn aid(&self) -> Result<Option<Vec<u8>>, CryptoTokenKitError> {
         let ptr = unsafe { ffi::token::ctk_smart_card_token_aid_json(self.raw) };
         decode_optional_json(ptr)
     }
 
+    /// Returns the corresponding `TKSmartCardToken` value.
     pub fn configuration(&self) -> Result<TokenConfigurationSnapshot, CryptoTokenKitError> {
         let mut error_ptr = ptr::null_mut();
         let ptr = unsafe { ffi::token::ctk_token_configuration_json(self.raw, &mut error_ptr) };

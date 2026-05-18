@@ -2,7 +2,7 @@
 
 Safe Rust bindings for Apple's [CryptoTokenKit](https://developer.apple.com/documentation/cryptotokenkit) framework on macOS.
 
-> **Status:** v0.2.1 closes the remaining macOS-public CryptoTokenKit gaps, including token/session/driver delegates, secure smart-card PIN interactions, TLV parsing helpers, and framework error constants. The crate now reaches 100% verified coverage of the audited macOS 26.2 public surface, with only iOS-only/deprecated SDK exemptions left in [`COVERAGE.md`](COVERAGE.md).
+> **Status:** v0.2.3 keeps the audited macOS-public CryptoTokenKit surface at 100% verified wrapper coverage and now documents the public safe Rust API against the corresponding framework types, methods, and delegate entry points. Only iOS-only/deprecated SDK exemptions remain in [`COVERAGE.md`](COVERAGE.md).
 
 ## Quick start
 

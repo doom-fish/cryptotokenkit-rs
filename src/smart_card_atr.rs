@@ -6,21 +6,32 @@ use crate::ffi;
 use crate::private::{decode_optional_json, encode_json_cstring};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-pub struct SmartCardProtocol(pub u32);
+/// Wraps the `TKSmartCardProtocol` bitset.
+pub struct SmartCardProtocol(
+    /// Serialized field bridged from `TKSmartCardProtocol`.
+    pub u32,
+);
 
 impl SmartCardProtocol {
+    /// Wraps the corresponding `TKSmartCardProtocol` operation.
     pub const NONE: Self = Self(0);
+    /// Wraps the corresponding `TKSmartCardProtocol` operation.
     pub const T0: Self = Self(1 << 0);
+    /// Wraps the corresponding `TKSmartCardProtocol` operation.
     pub const T1: Self = Self(1 << 1);
+    /// Wraps the corresponding `TKSmartCardProtocol` operation.
     pub const T15: Self = Self(1 << 15);
+    /// Wraps the corresponding `TKSmartCardProtocol` operation.
     pub const ANY: Self = Self((1 << 16) - 1);
 
     #[must_use]
+    /// Wraps the corresponding `TKSmartCardProtocol` operation.
     pub const fn bits(self) -> u32 {
         self.0
     }
 
     #[must_use]
+    /// Wraps the corresponding `TKSmartCardProtocol` operation.
     pub const fn from_bits(bits: u32) -> Self {
         Self(bits)
     }
@@ -28,24 +39,34 @@ impl SmartCardProtocol {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+/// Selects which `TKTLVRecord` encoding rules to use.
 pub enum TlvEncoding {
+    /// Variant bridged from `TKTLVRecord`.
     Ber,
+    /// Variant bridged from `TKTLVRecord`.
     Simple,
+    /// Variant bridged from `TKTLVRecord`.
     Compact,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+/// Snapshot of a `TKTLVRecord` bridged through the Swift helper layer.
 pub struct TlvRecord {
+    /// Serialized field bridged from `TKTLVRecord`.
     pub encoding: TlvEncoding,
+    /// Serialized field bridged from `TKTLVRecord`.
     pub tag: u64,
     #[serde(with = "serde_bytes")]
+    /// Serialized field bridged from `TKTLVRecord`.
     pub value: Vec<u8>,
     #[serde(with = "serde_bytes")]
+    /// Serialized field bridged from `TKTLVRecord`.
     pub data: Vec<u8>,
 }
 
 impl TlvRecord {
+    /// Wraps the corresponding `TKTLVRecord` operation.
     pub fn ber(tag: u64, value: &[u8]) -> Option<Self> {
         let ptr = unsafe {
             ffi::smart_card_atr::ctk_ber_tlv_record_json(tag, value.as_ptr(), value.len())
@@ -53,11 +74,13 @@ impl TlvRecord {
         decode_optional_json(ptr).ok().flatten()
     }
 
+    /// Wraps the corresponding `TKTLVRecord` operation.
     pub fn ber_tag_data(tag: u64) -> Option<Vec<u8>> {
         let ptr = unsafe { ffi::smart_card_atr::ctk_ber_tlv_tag_data_json(tag) };
         decode_optional_json(ptr).ok().flatten()
     }
 
+    /// Wraps the corresponding `TKTLVRecord` operation.
     pub fn ber_constructed(tag: u64, records: &[Self]) -> Option<Self> {
         let payload = encode_json_cstring(records).ok()?;
         let ptr = unsafe {
@@ -66,6 +89,7 @@ impl TlvRecord {
         decode_optional_json(ptr).ok().flatten()
     }
 
+    /// Wraps the corresponding `TKTLVRecord` operation.
     pub fn simple(tag: u8, value: &[u8]) -> Option<Self> {
         let ptr = unsafe {
             ffi::smart_card_atr::ctk_simple_tlv_record_json(tag, value.as_ptr(), value.len())
@@ -73,6 +97,7 @@ impl TlvRecord {
         decode_optional_json(ptr).ok().flatten()
     }
 
+    /// Wraps the corresponding `TKTLVRecord` operation.
     pub fn compact(tag: u8, value: &[u8]) -> Option<Self> {
         let ptr = unsafe {
             ffi::smart_card_atr::ctk_compact_tlv_record_json(tag, value.as_ptr(), value.len())
@@ -80,21 +105,25 @@ impl TlvRecord {
         decode_optional_json(ptr).ok().flatten()
     }
 
+    /// Parses data with the corresponding `TKTLVRecord` helper.
     pub fn parse(data: &[u8]) -> Option<Self> {
         Self::parse_with_encoding(TlvEncoding::Ber, data)
             .or_else(|| Self::parse_with_encoding(TlvEncoding::Simple, data))
             .or_else(|| Self::parse_with_encoding(TlvEncoding::Compact, data))
     }
 
+    /// Parses data with the corresponding `TKTLVRecord` helper.
     pub fn parse_with_encoding(encoding: TlvEncoding, data: &[u8]) -> Option<Self> {
         let (record, consumed) = parse_tlv_record_prefix(encoding, data)?;
         (consumed == data.len()).then_some(record)
     }
 
+    /// Parses data with the corresponding `TKTLVRecord` helper.
     pub fn parse_sequence(data: &[u8]) -> Option<Vec<Self>> {
         parse_tlv_sequence_with_fallback(data)
     }
 
+    /// Parses data with the corresponding `TKTLVRecord` helper.
     pub fn parse_sequence_with_encoding(encoding: TlvEncoding, data: &[u8]) -> Option<Vec<Self>> {
         let mut remaining = data;
         let mut records = Vec::new();
@@ -210,23 +239,35 @@ fn parse_ber_record_prefix(data: &[u8]) -> Option<(TlvRecord, usize)> {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+/// Snapshot of one `TKSmartCardATR` interface group.
 pub struct SmartCardAtrInterfaceGroup {
+    /// Serialized field bridged from `TKSmartCardATR`.
     pub index: i64,
+    /// Serialized field bridged from `TKSmartCardATR`.
     pub ta: Option<u8>,
+    /// Serialized field bridged from `TKSmartCardATR`.
     pub tb: Option<u8>,
+    /// Serialized field bridged from `TKSmartCardATR`.
     pub tc: Option<u8>,
+    /// Serialized field bridged from `TKSmartCardATR`.
     pub protocol: Option<SmartCardProtocol>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+/// Snapshot of `TKSmartCardATR`.
 pub struct SmartCardAtr {
     #[serde(with = "serde_bytes")]
+    /// Serialized field bridged from `TKSmartCardATR`.
     pub bytes: Vec<u8>,
+    /// Serialized field bridged from `TKSmartCardATR`.
     pub protocols: Vec<SmartCardProtocol>,
+    /// Serialized field bridged from `TKSmartCardATR`.
     pub interface_groups: Vec<SmartCardAtrInterfaceGroup>,
     #[serde(with = "serde_bytes")]
+    /// Serialized field bridged from `TKSmartCardATR`.
     pub historical_bytes: Vec<u8>,
+    /// Serialized field bridged from `TKSmartCardATR`.
     pub historical_records: Option<Vec<TlvRecord>>,
 }
 
@@ -251,6 +292,7 @@ where
 
 impl SmartCardAtr {
     #[must_use]
+    /// Parses data with the corresponding `TKSmartCardATR` helper.
     pub fn parse(bytes: &[u8]) -> Option<Self> {
         let ptr = unsafe {
             ffi::smart_card_atr::ctk_smart_card_atr_parse_bytes_json(bytes.as_ptr(), bytes.len())
@@ -258,6 +300,7 @@ impl SmartCardAtr {
         decode_optional_json(ptr).ok().flatten()
     }
 
+    /// Parses data with the corresponding `TKSmartCardATR` helper.
     pub fn parse_from_source<F>(callback: F) -> Option<Self>
     where
         F: FnMut() -> Option<u8>,

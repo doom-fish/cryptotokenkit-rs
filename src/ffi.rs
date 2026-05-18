@@ -1,3 +1,5 @@
+#![doc(hidden)]
+
 use core::ffi::c_void;
 
 pub mod status {

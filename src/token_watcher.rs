@@ -12,9 +12,13 @@ use crate::private::{decode_json, decode_optional_json, status_result, to_cstrin
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+/// Snapshot of token metadata returned by `TKTokenWatcher`.
 pub struct TokenWatcherTokenInfo {
+    /// Serialized field bridged from `TKTokenWatcher`.
     pub token_id: String,
+    /// Serialized field bridged from `TKTokenWatcher`.
     pub slot_name: Option<String>,
+    /// Serialized field bridged from `TKTokenWatcher`.
     pub driver_name: Option<String>,
 }
 
@@ -25,6 +29,7 @@ struct CallbackState {
 }
 
 #[allow(clippy::vec_box)]
+/// Wraps `TKTokenWatcher`.
 pub struct TokenWatcher {
     raw: *mut c_void,
     insertion_state: Option<Box<CallbackState>>,
@@ -51,6 +56,7 @@ unsafe extern "C" fn token_watcher_trampoline(user_info: *mut c_void, token_id: 
 
 impl TokenWatcher {
     #[must_use]
+    /// Creates a new wrapper around `TKTokenWatcher`.
     pub fn new() -> Self {
         let raw = unsafe { ffi::token_watcher::ctk_token_watcher_new() };
         assert!(!raw.is_null(), "Swift bridge returned a null token watcher");
@@ -61,6 +67,7 @@ impl TokenWatcher {
         }
     }
 
+    /// Returns the corresponding `TKTokenWatcher` value.
     pub fn token_ids(&self) -> Result<Vec<String>, CryptoTokenKitError> {
         let mut error_ptr = ptr::null_mut();
         let ptr = unsafe {
@@ -75,6 +82,7 @@ impl TokenWatcher {
         decode_json(ptr)
     }
 
+    /// Sets the corresponding `TKTokenWatcher` value.
     pub fn set_insertion_handler(
         &mut self,
         callback: impl FnMut(String) + Send + 'static,
@@ -99,6 +107,7 @@ impl TokenWatcher {
         Ok(())
     }
 
+    /// Registers the corresponding `TKTokenWatcher` callback.
     pub fn add_removal_handler(
         &mut self,
         token_id: &str,
@@ -126,6 +135,7 @@ impl TokenWatcher {
         Ok(())
     }
 
+    /// Returns the corresponding `TKTokenWatcher` value.
     pub fn token_info(
         &self,
         token_id: &str,
