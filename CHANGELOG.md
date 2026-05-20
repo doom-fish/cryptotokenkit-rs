@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.3.0] - 2026-05-20
+
+### Added
+
+- `async_api` module behind the `async` feature, providing executor-agnostic async wrappers for `TKTokenWatcher` insertion and removal callbacks. Uses `doom-fish-utils::stream`.
+
 ## [0.2.3] - 2026-05-18
 
 ### Changed

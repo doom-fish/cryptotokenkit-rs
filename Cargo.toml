@@ -1,6 +1,6 @@
 [package]
 name = "cryptotokenkit-rs"
-version = "0.2.3"
+version = "0.3.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 homepage = "https://github.com/doom-fish/cryptotokenkit-rs"
@@ -37,11 +37,19 @@ cargo = { level = "warn", priority = -1 }
 name = "cryptotokenkit"
 crate-type = ["lib"]
 
+[features]
+default = []
+async = ["dep:doom-fish-utils", "doom-fish-utils/futures-stream"]
+
 [dependencies]
+doom-fish-utils = { path = "../doom-fish-utils", version = ">=0.3, <0.4", optional = true }
 libc = "0.2"
 serde = { version = "1", features = ["derive"] }
 serde_bytes = "0.11"
 serde_json = "1"
+
+[dev-dependencies]
+pollster = "0.3"
 
 [package.metadata.docs.rs]
 all-features = true
@@ -51,6 +59,10 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [badges]
 maintenance = { status = "actively-developed" }
+
+[[example]]
+name = "11_async_token_watcher"
+required-features = ["async"]
 
 [profile.release]
 debug = "full"

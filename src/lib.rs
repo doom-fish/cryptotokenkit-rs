@@ -18,6 +18,9 @@
     clippy::unsafe_derive_deserialize
 )]
 
+#[cfg(feature = "async")]
+#[cfg_attr(docsrs, doc(cfg(feature = "async")))]
+pub mod async_api;
 /// Error-domain and status-code wrappers for `CryptoTokenKit` failures.
 pub mod error;
 #[doc(hidden)]
