@@ -16,8 +16,7 @@ let package = Package(
     targets: [
         .target(
             name: "CryptoTokenKitBridge",
-            path: "Sources/CryptoTokenKitBridge",
-            publicHeadersPath: "include"
+            path: "Sources/CryptoTokenKitBridge"
         )
     ]
 )

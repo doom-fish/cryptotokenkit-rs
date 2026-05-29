@@ -1,4 +1,0 @@
-module CryptoTokenKitBridge {
-    header "CryptoTokenKitBridge.h"
-    export *
-}
