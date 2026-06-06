@@ -790,7 +790,15 @@ unsafe extern "C" fn smart_card_token_driver_create_token_trampoline(
         let driver = SmartCardTokenDriver::from_raw(driver_raw);
         let smart_card = SmartCard::from_raw(smart_card_raw);
         let aid = if has_aid {
-            Some(unsafe { std::slice::from_raw_parts(aid_ptr, aid_len) })
+            // Swift's `Data.withUnsafeBytes` yields a null `baseAddress` for an empty
+            // `Data`, so an empty (but present) AID arrives as a null pointer with
+            // `has_aid == true`. `slice::from_raw_parts(null, 0)` is undefined behavior,
+            // so substitute an empty slice in that case while preserving `Some` semantics.
+            if aid_ptr.is_null() {
+                Some([].as_slice())
+            } else {
+                Some(unsafe { std::slice::from_raw_parts(aid_ptr, aid_len) })
+            }
         } else {
             None
         };

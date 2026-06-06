@@ -1,4 +1,5 @@
 use core::ffi::c_void;
+use std::panic::{catch_unwind, AssertUnwindSafe};
 
 use serde::{Deserialize, Serialize};
 
@@ -286,8 +287,15 @@ where
         return -1;
     }
 
-    let state = unsafe { &mut *user_info.cast::<AtrSourceState<F>>() };
-    (state.callback)().map_or(-1, i32::from)
+    // SAFETY: user_info is null-checked above and points to a valid AtrSourceState<F>
+    // kept alive by the caller for the duration of the synchronous parse call.
+    // The user-supplied closure may panic, so it is wrapped in catch_unwind to
+    // prevent unwinding across the FFI boundary (which would be undefined behavior).
+    catch_unwind(AssertUnwindSafe(|| {
+        let state = unsafe { &mut *user_info.cast::<AtrSourceState<F>>() };
+        (state.callback)().map_or(-1, i32::from)
+    }))
+    .unwrap_or(-1)
 }
 
 impl SmartCardAtr {
