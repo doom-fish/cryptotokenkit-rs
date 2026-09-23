@@ -12,6 +12,7 @@ unsafe extern "C" {
         watcher: *mut c_void,
         callback: TokenWatcherCallback,
         user_info: *mut c_void,
+        release: super::ContextRelease,
         error_out: *mut *mut c_char,
     ) -> i32;
     pub fn ctk_token_watcher_add_removal_handler(
@@ -19,6 +20,7 @@ unsafe extern "C" {
         token_id: *const c_char,
         callback: TokenWatcherCallback,
         user_info: *mut c_void,
+        release: super::ContextRelease,
         error_out: *mut *mut c_char,
     ) -> i32;
     pub fn ctk_token_watcher_token_info_json(

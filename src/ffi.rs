@@ -10,6 +10,8 @@ pub mod status {
     pub const UNSUPPORTED: i32 = -1004;
 }
 
+pub type ContextRelease = Option<unsafe extern "C" fn(*mut c_void)>;
+
 pub mod scard_slot_manager;
 pub mod smart_card;
 pub mod smart_card_atr;

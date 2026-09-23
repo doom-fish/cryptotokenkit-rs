@@ -31,6 +31,7 @@ unsafe extern "C" {
         slot: *mut c_void,
         callback: SlotStateCallback,
         user_info: *mut c_void,
+        release: super::ContextRelease,
         out_observer: *mut *mut c_void,
         error_out: *mut *mut c_char,
     ) -> i32;

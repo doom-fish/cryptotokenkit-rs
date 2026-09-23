@@ -19,16 +19,16 @@ private enum CTKSmartCardUserInteractionEvent: Int32 {
 
 private final class CTKSmartCardUserInteractionDelegateBox: NSObject, TKSmartCardUserInteractionDelegate {
     private let callback: CTKSmartCardUserInteractionEventCallback
-    private let userInfo: UnsafeMutableRawPointer?
+    private let context: CTKCallbackContext
 
-    init(callback: @escaping CTKSmartCardUserInteractionEventCallback, userInfo: UnsafeMutableRawPointer?) {
+    init(callback: @escaping CTKSmartCardUserInteractionEventCallback, context: CTKCallbackContext) {
         self.callback = callback
-        self.userInfo = userInfo
+        self.context = context
         super.init()
     }
 
     private func emit(_ event: CTKSmartCardUserInteractionEvent, interaction: TKSmartCardUserInteraction) {
-        callback(userInfo, ctkRetain(interaction), event.rawValue)
+        callback(context.pointer, ctkRetain(interaction), event.rawValue)
     }
 
     func characterEntered(in interaction: TKSmartCardUserInteraction) {
@@ -416,9 +416,11 @@ public func ctk_smart_card_user_interaction_set_delegate(
     _ interactionPtr: UnsafeMutableRawPointer?,
     _ callback: CTKSmartCardUserInteractionEventCallback?,
     _ userInfo: UnsafeMutableRawPointer?,
+    _ release: CTKContextRelease?,
     _ outDelegate: UnsafeMutablePointer<UnsafeMutableRawPointer?>,
     _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> Int32 {
+    let context = CTKCallbackContext(userInfo, release: release)
     outDelegate.pointee = nil
     guard let interactionPtr else {
         ctkWriteError(errorOut, "missing smart-card user-interaction handle")
@@ -429,7 +431,7 @@ public func ctk_smart_card_user_interaction_set_delegate(
         return CTK_INVALID_ARGUMENT
     }
     let interaction: TKSmartCardUserInteraction = ctkBorrow(interactionPtr)
-    let box = CTKSmartCardUserInteractionDelegateBox(callback: callback, userInfo: userInfo)
+    let box = CTKSmartCardUserInteractionDelegateBox(callback: callback, context: context)
     interaction.delegate = box
     outDelegate.pointee = ctkRetain(box)
     return CTK_OK

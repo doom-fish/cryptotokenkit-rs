@@ -1,8 +1,9 @@
 use core::ffi::c_void;
 use std::ops::{Deref, DerefMut};
-use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::ptr;
-use std::sync::Mutex;
+use std::sync::{Mutex, PoisonError};
+
+use doom_fish_utils::callback_context::CallbackContext;
 
 use crate::error::CryptoTokenKitError;
 use crate::ffi;
@@ -66,18 +67,17 @@ pub trait SmartCardUserInteractionDelegate: Send {
     fn new_pin_confirmation_requested(&mut self, _interaction: &SmartCardUserInteraction) {}
 }
 
-struct SmartCardUserInteractionDelegateState {
-    delegate: Mutex<Box<dyn SmartCardUserInteractionDelegate>>,
-}
+type SmartCardUserInteractionDelegateCell = Mutex<Box<dyn SmartCardUserInteractionDelegate>>;
 
 /// Lifetime token for a bridged `TKSmartCardUserInteraction` delegate.
 pub struct SmartCardUserInteractionDelegateHandle {
     raw: *mut c_void,
-    _state: Box<SmartCardUserInteractionDelegateState>,
+    context: CallbackContext<SmartCardUserInteractionDelegateCell>,
 }
 
 impl Drop for SmartCardUserInteractionDelegateHandle {
     fn drop(&mut self) {
+        self.context.deactivate();
         if !self.raw.is_null() {
             unsafe { ffi::ctk_object_release(self.raw) };
             self.raw = ptr::null_mut();
@@ -109,19 +109,16 @@ impl SmartCardUserInteraction {
     where
         D: SmartCardUserInteractionDelegate + 'static,
     {
-        let state = Box::new(SmartCardUserInteractionDelegateState {
-            delegate: Mutex::new(Box::new(delegate)),
-        });
-        let user_info = std::ptr::from_ref(state.as_ref())
-            .cast_mut()
-            .cast::<c_void>();
+        let cell: SmartCardUserInteractionDelegateCell = Mutex::new(Box::new(delegate));
+        let context = CallbackContext::new(cell);
         let mut raw = ptr::null_mut();
         let mut error_ptr = ptr::null_mut();
         let status = unsafe {
             ffi::smart_card_interaction::ctk_smart_card_user_interaction_set_delegate(
                 self.raw,
                 Some(smart_card_user_interaction_trampoline),
-                user_info,
+                context.retained_ptr(),
+                Some(CallbackContext::<SmartCardUserInteractionDelegateCell>::RELEASE),
                 &raw mut raw,
                 &raw mut error_ptr,
             )
@@ -132,7 +129,7 @@ impl SmartCardUserInteraction {
                 "Swift bridge returned a null smart-card user-interaction delegate handle".into(),
             ));
         }
-        Ok(SmartCardUserInteractionDelegateHandle { raw, _state: state })
+        Ok(SmartCardUserInteractionDelegateHandle { raw, context })
     }
 
     #[must_use]
@@ -452,17 +449,13 @@ unsafe extern "C" fn smart_card_user_interaction_trampoline(
     interaction_raw: *mut c_void,
     event_raw: i32,
 ) {
-    if user_info.is_null() || interaction_raw.is_null() {
+    let interaction = SmartCardUserInteraction::from_raw(interaction_raw);
+    if interaction_raw.is_null() {
         return;
     }
 
-    let _ = catch_unwind(AssertUnwindSafe(|| {
-        let state = unsafe { &*user_info.cast::<SmartCardUserInteractionDelegateState>() };
-        let interaction = SmartCardUserInteraction::from_raw(interaction_raw);
-        let mut delegate = match state.delegate.lock() {
-            Ok(guard) => guard,
-            Err(poisoned) => poisoned.into_inner(),
-        };
+    let dispatch = |delegate: &SmartCardUserInteractionDelegateCell| {
+        let mut delegate = delegate.lock().unwrap_or_else(PoisonError::into_inner);
         match SmartCardUserInteractionEvent::from_raw(event_raw) {
             SmartCardUserInteractionEvent::CharacterEntered => {
                 delegate.character_entered(&interaction);
@@ -486,7 +479,14 @@ unsafe extern "C" fn smart_card_user_interaction_trampoline(
                 delegate.new_pin_confirmation_requested(&interaction);
             }
         }
-    }));
+    };
+    unsafe {
+        CallbackContext::<SmartCardUserInteractionDelegateCell>::with(
+            user_info,
+            "SmartCardUserInteractionDelegate",
+            dispatch,
+        )
+    };
 }
 
 impl SmartCard {

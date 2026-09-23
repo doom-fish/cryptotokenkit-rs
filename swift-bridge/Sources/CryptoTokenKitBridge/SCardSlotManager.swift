@@ -9,12 +9,16 @@ private final class CTKSlotStateObserverBox: NSObject {
     init(
         slot: TKSmartCardSlot,
         callback: @escaping CTKSlotStateCallback,
-        userInfo: UnsafeMutableRawPointer?
+        context: CTKCallbackContext
     ) {
         self.observation = slot.observe(\.state, options: [.initial, .new]) { slot, _ in
-            callback(userInfo, Int32(slot.state.rawValue))
+            callback(context.pointer, Int32(slot.state.rawValue))
         }
         super.init()
+    }
+
+    deinit {
+        observation.invalidate()
     }
 }
 
@@ -148,9 +152,11 @@ public func ctk_slot_observe_state(
     _ slotPtr: UnsafeMutableRawPointer?,
     _ callback: CTKSlotStateCallback?,
     _ userInfo: UnsafeMutableRawPointer?,
+    _ release: CTKContextRelease?,
     _ outObserver: UnsafeMutablePointer<UnsafeMutableRawPointer?>,
     _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> Int32 {
+    let context = CTKCallbackContext(userInfo, release: release)
     outObserver.pointee = nil
     guard let slotPtr else {
         ctkWriteError(errorOut, "missing smart-card slot")
@@ -162,7 +168,7 @@ public func ctk_slot_observe_state(
     }
 
     let slot: TKSmartCardSlot = ctkBorrow(slotPtr)
-    let observer = CTKSlotStateObserverBox(slot: slot, callback: callback, userInfo: userInfo)
+    let observer = CTKSlotStateObserverBox(slot: slot, callback: callback, context: context)
     outObserver.pointee = ctkRetain(observer)
     return CTK_OK
 }

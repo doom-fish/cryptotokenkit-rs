@@ -35,8 +35,10 @@ public func ctk_token_watcher_set_insertion_handler(
     _ watcherPtr: UnsafeMutableRawPointer?,
     _ callback: CTKTokenWatcherCallback?,
     _ userInfo: UnsafeMutableRawPointer?,
+    _ release: CTKContextRelease?,
     _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> Int32 {
+    let context = CTKCallbackContext(userInfo, release: release)
     guard let watcherPtr else {
         ctkWriteError(errorOut, "missing token watcher handle")
         return CTK_INVALID_ARGUMENT
@@ -47,7 +49,7 @@ public func ctk_token_watcher_set_insertion_handler(
     }
     let watcher: TKTokenWatcher = ctkBorrow(watcherPtr)
     watcher.setInsertionHandler { tokenID in
-        tokenID.withCString { callback(userInfo, $0) }
+        tokenID.withCString { callback(context.pointer, $0) }
     }
     return CTK_OK
 }
@@ -58,8 +60,10 @@ public func ctk_token_watcher_add_removal_handler(
     _ tokenID: UnsafePointer<CChar>?,
     _ callback: CTKTokenWatcherCallback?,
     _ userInfo: UnsafeMutableRawPointer?,
+    _ release: CTKContextRelease?,
     _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> Int32 {
+    let context = CTKCallbackContext(userInfo, release: release)
     guard let watcherPtr else {
         ctkWriteError(errorOut, "missing token watcher handle")
         return CTK_INVALID_ARGUMENT
@@ -74,7 +78,7 @@ public func ctk_token_watcher_add_removal_handler(
     }
     let watcher: TKTokenWatcher = ctkBorrow(watcherPtr)
     watcher.addRemovalHandler({ tokenID in
-        tokenID.withCString { callback(userInfo, $0) }
+        tokenID.withCString { callback(context.pointer, $0) }
     }, forTokenID: String(cString: tokenID))
     return CTK_OK
 }

@@ -86,6 +86,7 @@ unsafe extern "C" {
         decrypt_callback: TokenSessionDataCallback,
         key_exchange_callback: TokenSessionKeyExchangeCallback,
         user_info: *mut c_void,
+        release: super::ContextRelease,
         out_delegate: *mut *mut c_void,
         error_out: *mut *mut c_char,
     ) -> i32;
@@ -148,6 +149,7 @@ unsafe extern "C" {
         create_session_callback: TokenCreateSessionCallback,
         terminate_session_callback: TokenTerminateSessionCallback,
         user_info: *mut c_void,
+        release: super::ContextRelease,
         out_delegate: *mut *mut c_void,
         error_out: *mut *mut c_char,
     ) -> i32;
@@ -166,6 +168,7 @@ unsafe extern "C" {
         create_token_callback: TokenDriverCreateTokenCallback,
         terminate_token_callback: TokenDriverTerminateTokenCallback,
         user_info: *mut c_void,
+        release: super::ContextRelease,
         out_delegate: *mut *mut c_void,
         error_out: *mut *mut c_char,
     ) -> i32;
@@ -197,6 +200,7 @@ unsafe extern "C" {
         create_token_callback: SmartCardTokenDriverCreateTokenCallback,
         terminate_token_callback: SmartCardTokenDriverTerminateTokenCallback,
         user_info: *mut c_void,
+        release: super::ContextRelease,
         out_delegate: *mut *mut c_void,
         error_out: *mut *mut c_char,
     ) -> i32;

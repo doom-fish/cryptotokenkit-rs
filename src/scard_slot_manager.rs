@@ -1,8 +1,8 @@
 use core::ffi::c_void;
-use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::ptr;
-use std::sync::Mutex;
+use std::sync::{Mutex, PoisonError};
 
+use doom_fish_utils::callback_context::CallbackContext;
 use serde::{Deserialize, Serialize};
 
 use crate::error::{from_swift, CryptoTokenKitError};
@@ -85,14 +85,12 @@ impl SlotStateDelegate for SlotStateCallbacks {
     }
 }
 
-struct CallbackState {
-    delegate: Mutex<Box<dyn SlotStateDelegate>>,
-}
+type SlotStateDelegateCell = Mutex<Box<dyn SlotStateDelegate>>;
 
 /// Lifetime token for a bridged `TKSmartCardSlot.state` observer.
 pub struct SlotStateObserver {
     raw: *mut c_void,
-    _callback_state: Box<CallbackState>,
+    context: CallbackContext<SlotStateDelegateCell>,
 }
 
 /// Wraps `TKSmartCardSlotManager`.
@@ -113,18 +111,18 @@ impl SmartCardSlot {
 }
 
 unsafe extern "C" fn slot_state_trampoline(user_info: *mut c_void, raw_state: i32) {
-    if user_info.is_null() {
-        return;
-    }
-
-    let _ = catch_unwind(AssertUnwindSafe(|| {
-        let state = unsafe { &*user_info.cast::<CallbackState>() };
-        let mut delegate = match state.delegate.lock() {
-            Ok(guard) => guard,
-            Err(poisoned) => poisoned.into_inner(),
-        };
-        delegate.did_change_state(SlotState::from_raw(raw_state));
-    }));
+    unsafe {
+        CallbackContext::<SlotStateDelegateCell>::with(
+            user_info,
+            "SlotStateDelegate::did_change_state",
+            |delegate| {
+                delegate
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .did_change_state(SlotState::from_raw(raw_state));
+            },
+        )
+    };
 }
 
 impl SmartCardSlotManager {
@@ -241,19 +239,16 @@ impl SmartCardSlot {
     where
         D: SlotStateDelegate + 'static,
     {
-        let callback_state = Box::new(CallbackState {
-            delegate: Mutex::new(Box::new(delegate)),
-        });
-        let user_info = std::ptr::from_ref(callback_state.as_ref())
-            .cast_mut()
-            .cast::<c_void>();
+        let cell: SlotStateDelegateCell = Mutex::new(Box::new(delegate));
+        let context = CallbackContext::new(cell);
         let mut raw = ptr::null_mut();
         let mut error_ptr = ptr::null_mut();
         let status = unsafe {
             ffi::scard_slot_manager::ctk_slot_observe_state(
                 self.raw,
                 Some(slot_state_trampoline),
-                user_info,
+                context.retained_ptr(),
+                Some(CallbackContext::<SlotStateDelegateCell>::RELEASE),
                 &raw mut raw,
                 &raw mut error_ptr,
             )
@@ -265,15 +260,13 @@ impl SmartCardSlot {
             ));
         }
 
-        Ok(SlotStateObserver {
-            raw,
-            _callback_state: callback_state,
-        })
+        Ok(SlotStateObserver { raw, context })
     }
 }
 
 impl Drop for SlotStateObserver {
     fn drop(&mut self) {
+        self.context.deactivate();
         if !self.raw.is_null() {
             unsafe { ffi::ctk_object_release(self.raw) };
             self.raw = ptr::null_mut();

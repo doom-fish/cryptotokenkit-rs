@@ -1,9 +1,9 @@
 use core::ffi::{c_char, c_void};
 use std::ffi::CStr;
-use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::ptr;
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard, PoisonError};
 
+use doom_fish_utils::callback_context::CallbackContext;
 use serde_json::Value;
 
 use crate::error::{failure_status, CryptoTokenKitError, TKErrorCode};
@@ -277,50 +277,40 @@ pub trait SmartCardTokenDriverDelegate: Send {
     fn terminate_token(&mut self, _driver: &SmartCardTokenDriver, _token: &SmartCardToken) {}
 }
 
-struct TokenSessionDelegateState {
-    delegate: Mutex<Box<dyn TokenSessionDelegate>>,
-}
-
-struct TokenDelegateState {
-    delegate: Mutex<Box<dyn TokenDelegate>>,
-}
-
-struct TokenDriverDelegateState {
-    delegate: Mutex<Box<dyn TokenDriverDelegate>>,
-}
-
-struct SmartCardTokenDriverDelegateState {
-    delegate: Mutex<Box<dyn SmartCardTokenDriverDelegate>>,
-}
+type SessionDelegateCell = Mutex<Box<dyn TokenSessionDelegate>>;
+type TokenDelegateCell = Mutex<Box<dyn TokenDelegate>>;
+type DriverDelegateCell = Mutex<Box<dyn TokenDriverDelegate>>;
+type SmartCardDriverDelegateCell = Mutex<Box<dyn SmartCardTokenDriverDelegate>>;
 
 /// Lifetime token for a bridged `TKTokenSessionDelegate` registration.
 pub struct TokenSessionDelegateHandle {
     raw: *mut c_void,
-    _state: Box<TokenSessionDelegateState>,
+    context: CallbackContext<SessionDelegateCell>,
 }
 
 /// Lifetime token for a bridged `TKTokenDelegate` registration.
 pub struct TokenDelegateHandle {
     raw: *mut c_void,
-    _state: Box<TokenDelegateState>,
+    context: CallbackContext<TokenDelegateCell>,
 }
 
 /// Lifetime token for a bridged `TKTokenDriverDelegate` registration.
 pub struct TokenDriverDelegateHandle {
     raw: *mut c_void,
-    _state: Box<TokenDriverDelegateState>,
+    context: CallbackContext<DriverDelegateCell>,
 }
 
 /// Lifetime token for a bridged `TKSmartCardTokenDriverDelegate` registration.
 pub struct SmartCardTokenDriverDelegateHandle {
     raw: *mut c_void,
-    _state: Box<SmartCardTokenDriverDelegateState>,
+    context: CallbackContext<SmartCardDriverDelegateCell>,
 }
 
 macro_rules! impl_delegate_handle_drop {
     ($name:ident) => {
         impl Drop for $name {
             fn drop(&mut self) {
+                self.context.deactivate();
                 if !self.raw.is_null() {
                     // SAFETY: raw is either null (skipped) or a valid CryptoTokenKit delegate handle pointer.
                     // It must be released via ctk_object_release exactly once per creation.
@@ -347,6 +337,43 @@ fn c_string_to_string(ptr: *const c_char, missing: &str) -> Result<String, Crypt
         .into_owned())
 }
 
+fn lock<T: ?Sized>(cell: &Mutex<Box<T>>) -> MutexGuard<'_, Box<T>> {
+    cell.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+unsafe fn callback_bytes<'a>(ptr: *const u8, len: usize) -> Option<&'a [u8]> {
+    if ptr.is_null() {
+        return (len == 0).then_some(&[]);
+    }
+    Some(unsafe { std::slice::from_raw_parts(ptr, len) })
+}
+
+fn invalid_arguments(error_out: *mut *mut c_char, message: &str) -> i32 {
+    write_error_ptr(error_out, message);
+    ffi::status::INVALID_ARGUMENT
+}
+
+fn delegate_status(
+    result: Option<Result<(), CryptoTokenKitError>>,
+    error_out: *mut *mut c_char,
+    callback: &str,
+) -> i32 {
+    match result {
+        Some(Ok(())) => ffi::status::OK,
+        Some(Err(error)) => {
+            write_error_ptr(error_out, error.message());
+            failure_status(&error)
+        }
+        None => {
+            write_error_ptr(
+                error_out,
+                &format!("{callback} delegate callback failed: the Rust delegate was dropped or panicked"),
+            );
+            ffi::status::FRAMEWORK_ERROR
+        }
+    }
+}
+
 unsafe extern "C" fn token_session_begin_auth_trampoline(
     user_info: *mut c_void,
     session_raw: *mut c_void,
@@ -355,16 +382,12 @@ unsafe extern "C" fn token_session_begin_auth_trampoline(
     out_operation: *mut *mut c_void,
     error_out: *mut *mut c_char,
 ) -> i32 {
-    if user_info.is_null() || session_raw.is_null() {
-        write_error_ptr(error_out, "missing token-session delegate callback context");
-        return ffi::status::INVALID_ARGUMENT;
+    let session = TokenSession::from_raw(session_raw);
+    if session_raw.is_null() {
+        return invalid_arguments(error_out, "missing token-session delegate callback context");
     }
 
-    match catch_unwind(AssertUnwindSafe(|| -> Result<i32, CryptoTokenKitError> {
-        // SAFETY: user_info is null-checked above and is guaranteed to be a valid pointer to TokenSessionDelegateState
-        // because it was stored as Box::into_raw() in the delegate registration.
-        let state = unsafe { &*user_info.cast::<TokenSessionDelegateState>() };
-        let session = TokenSession::from_raw(session_raw);
+    let invoke = |delegate: &SessionDelegateCell| -> Result<(), CryptoTokenKitError> {
         let constraint = if constraint_json.is_null() {
             Value::Null
         } else {
@@ -378,14 +401,9 @@ unsafe extern "C" fn token_session_begin_auth_trampoline(
                 ))
             })?
         };
-        let mut delegate = match state.delegate.lock() {
-            Ok(guard) => guard,
-            Err(poisoned) => poisoned.into_inner(),
-        };
         let operation = TokenOperation::from_raw(operation_raw);
         let operation_handle =
-            delegate.begin_auth_for_operation(&session, operation, &constraint)?;
-        drop(delegate);
+            lock(delegate).begin_auth_for_operation(&session, operation, &constraint)?;
         if !out_operation.is_null() {
             // SAFETY: out_operation is not null as checked, and writing a pointer value is safe.
             unsafe {
@@ -393,21 +411,16 @@ unsafe extern "C" fn token_session_begin_auth_trampoline(
                     operation_handle.map_or(ptr::null_mut(), TokenAuthOperationHandle::into_raw);
             }
         }
-        Ok(ffi::status::OK)
-    })) {
-        Ok(Ok(status)) => status,
-        Ok(Err(error)) => {
-            write_error_ptr(error_out, error.message());
-            failure_status(&error)
-        }
-        Err(_) => {
-            write_error_ptr(
-                error_out,
-                "panic in token-session begin-auth delegate callback",
-            );
-            ffi::status::FRAMEWORK_ERROR
-        }
-    }
+        Ok(())
+    };
+    let result = unsafe {
+        CallbackContext::<SessionDelegateCell>::with(
+            user_info,
+            "TokenSessionDelegate::begin_auth_for_operation",
+            invoke,
+        )
+    };
+    delegate_status(result, error_out, "token-session begin-auth")
 }
 
 unsafe extern "C" fn token_session_supports_trampoline(
@@ -417,34 +430,30 @@ unsafe extern "C" fn token_session_supports_trampoline(
     object_id_ptr: *const c_char,
     algorithm_raw: *mut c_void,
 ) -> bool {
-    if user_info.is_null()
-        || session_raw.is_null()
-        || object_id_ptr.is_null()
-        || algorithm_raw.is_null()
-    {
+    let session = TokenSession::from_raw(session_raw);
+    let algorithm = TokenKeyAlgorithm::from_raw(algorithm_raw);
+    if session_raw.is_null() || object_id_ptr.is_null() || algorithm_raw.is_null() {
         return false;
     }
 
-    catch_unwind(AssertUnwindSafe(|| {
-        // SAFETY: user_info is null-checked above and is guaranteed to be valid TokenSessionDelegateState.
-        let state = unsafe { &*user_info.cast::<TokenSessionDelegateState>() };
-        let session = TokenSession::from_raw(session_raw);
-        let object_id = TokenObjectId(
-            c_string_to_string(object_id_ptr, "missing token object identifier")
-                .unwrap_or_default(),
-        );
-        let algorithm = TokenKeyAlgorithm::from_raw(algorithm_raw);
-        let mut delegate = match state.delegate.lock() {
-            Ok(guard) => guard,
-            Err(poisoned) => poisoned.into_inner(),
-        };
-        delegate.supports_operation(
-            &session,
-            TokenOperation::from_raw(operation_raw),
-            &object_id,
-            &algorithm,
+    unsafe {
+        CallbackContext::<SessionDelegateCell>::with(
+            user_info,
+            "TokenSessionDelegate::supports_operation",
+            |delegate| {
+                let object_id = TokenObjectId(
+                    c_string_to_string(object_id_ptr, "missing token object identifier")
+                        .unwrap_or_default(),
+                );
+                lock(delegate).supports_operation(
+                    &session,
+                    TokenOperation::from_raw(operation_raw),
+                    &object_id,
+                    &algorithm,
+                )
+            },
         )
-    }))
+    }
     .unwrap_or(false)
 }
 
@@ -459,57 +468,46 @@ unsafe extern "C" fn token_session_data_trampoline(
     error_out: *mut *mut c_char,
     mode: i32,
 ) -> i32 {
-    if user_info.is_null()
-        || session_raw.is_null()
-        || data_ptr.is_null()
-        || object_id_ptr.is_null()
-        || algorithm_raw.is_null()
-    {
-        write_error_ptr(
+    let session = TokenSession::from_raw(session_raw);
+    let algorithm = TokenKeyAlgorithm::from_raw(algorithm_raw);
+    let data = unsafe { callback_bytes(data_ptr, data_len) };
+    let (Some(data), false) = (
+        data,
+        session_raw.is_null() || object_id_ptr.is_null() || algorithm_raw.is_null(),
+    ) else {
+        return invalid_arguments(
             error_out,
             "missing token-session delegate callback arguments",
         );
-        return ffi::status::INVALID_ARGUMENT;
-    }
+    };
 
-    match catch_unwind(AssertUnwindSafe(|| -> Result<i32, CryptoTokenKitError> {
-        // SAFETY: user_info is null-checked above and is guaranteed to be valid TokenSessionDelegateState.
-        let state = unsafe { &*user_info.cast::<TokenSessionDelegateState>() };
-        let session = TokenSession::from_raw(session_raw);
+    let (site, callback) = if mode == 0 {
+        ("TokenSessionDelegate::sign_data", "token-session sign")
+    } else {
+        (
+            "TokenSessionDelegate::decrypt_data",
+            "token-session decrypt",
+        )
+    };
+    let invoke = |delegate: &SessionDelegateCell| -> Result<(), CryptoTokenKitError> {
         let object_id = TokenObjectId(c_string_to_string(
             object_id_ptr,
             "missing token object identifier",
         )?);
-        let algorithm = TokenKeyAlgorithm::from_raw(algorithm_raw);
-        // SAFETY: data_ptr is null-checked above and data_len is provided by the CryptoTokenKit framework;
-        // the slice is immediately converted to a Vec and not retained beyond this function scope.
-        let data = unsafe { std::slice::from_raw_parts(data_ptr, data_len) };
-        let mut delegate = match state.delegate.lock() {
-            Ok(guard) => guard,
-            Err(poisoned) => poisoned.into_inner(),
+        let reply = if mode == 0 {
+            lock(delegate).sign_data(&session, data, &object_id, &algorithm)?
+        } else {
+            lock(delegate).decrypt_data(&session, data, &object_id, &algorithm)?
         };
-        let reply = match mode {
-            0 => delegate.sign_data(&session, data, &object_id, &algorithm)?,
-            _ => delegate.decrypt_data(&session, data, &object_id, &algorithm)?,
-        };
-        drop(delegate);
         if !out_reply_json.is_null() {
             unsafe {
                 *out_reply_json = json_to_ptr(&reply)?;
             }
         }
-        Ok(ffi::status::OK)
-    })) {
-        Ok(Ok(status)) => status,
-        Ok(Err(error)) => {
-            write_error_ptr(error_out, error.message());
-            failure_status(&error)
-        }
-        Err(_) => {
-            write_error_ptr(error_out, "panic in token-session data delegate callback");
-            ffi::status::FRAMEWORK_ERROR
-        }
-    }
+        Ok(())
+    };
+    let result = unsafe { CallbackContext::<SessionDelegateCell>::with(user_info, site, invoke) };
+    delegate_status(result, error_out, callback)
 }
 
 unsafe extern "C" fn token_session_sign_trampoline(
@@ -573,62 +571,50 @@ unsafe extern "C" fn token_session_key_exchange_trampoline(
     out_reply_json: *mut *mut c_char,
     error_out: *mut *mut c_char,
 ) -> i32 {
-    if user_info.is_null()
-        || session_raw.is_null()
-        || public_key_ptr.is_null()
-        || object_id_ptr.is_null()
-        || algorithm_raw.is_null()
-        || parameters_raw.is_null()
-    {
-        write_error_ptr(
+    let session = TokenSession::from_raw(session_raw);
+    let algorithm = TokenKeyAlgorithm::from_raw(algorithm_raw);
+    let parameters = TokenKeyExchangeParameters::from_raw(parameters_raw);
+    let public_key = unsafe { callback_bytes(public_key_ptr, public_key_len) };
+    let (Some(public_key), false) = (
+        public_key,
+        session_raw.is_null()
+            || object_id_ptr.is_null()
+            || algorithm_raw.is_null()
+            || parameters_raw.is_null(),
+    ) else {
+        return invalid_arguments(
             error_out,
             "missing token-session key-exchange callback arguments",
         );
-        return ffi::status::INVALID_ARGUMENT;
-    }
+    };
 
-    match catch_unwind(AssertUnwindSafe(|| -> Result<i32, CryptoTokenKitError> {
-        let state = unsafe { &*user_info.cast::<TokenSessionDelegateState>() };
-        let session = TokenSession::from_raw(session_raw);
+    let invoke = |delegate: &SessionDelegateCell| -> Result<(), CryptoTokenKitError> {
         let object_id = TokenObjectId(c_string_to_string(
             object_id_ptr,
             "missing token object identifier",
         )?);
-        let algorithm = TokenKeyAlgorithm::from_raw(algorithm_raw);
-        let parameters = TokenKeyExchangeParameters::from_raw(parameters_raw);
-        let public_key = unsafe { std::slice::from_raw_parts(public_key_ptr, public_key_len) };
-        let mut delegate = match state.delegate.lock() {
-            Ok(guard) => guard,
-            Err(poisoned) => poisoned.into_inner(),
-        };
-        let reply = delegate.perform_key_exchange(
+        let reply = lock(delegate).perform_key_exchange(
             &session,
             public_key,
             &object_id,
             &algorithm,
             &parameters,
         )?;
-        drop(delegate);
         if !out_reply_json.is_null() {
             unsafe {
                 *out_reply_json = json_to_ptr(&reply)?;
             }
         }
-        Ok(ffi::status::OK)
-    })) {
-        Ok(Ok(status)) => status,
-        Ok(Err(error)) => {
-            write_error_ptr(error_out, error.message());
-            failure_status(&error)
-        }
-        Err(_) => {
-            write_error_ptr(
-                error_out,
-                "panic in token-session key-exchange delegate callback",
-            );
-            ffi::status::FRAMEWORK_ERROR
-        }
-    }
+        Ok(())
+    };
+    let result = unsafe {
+        CallbackContext::<SessionDelegateCell>::with(
+            user_info,
+            "TokenSessionDelegate::perform_key_exchange",
+            invoke,
+        )
+    };
+    delegate_status(result, error_out, "token-session key-exchange")
 }
 
 unsafe extern "C" fn token_create_session_trampoline(
@@ -637,37 +623,28 @@ unsafe extern "C" fn token_create_session_trampoline(
     out_session: *mut *mut c_void,
     error_out: *mut *mut c_char,
 ) -> i32 {
-    if user_info.is_null() || token_raw.is_null() {
-        write_error_ptr(error_out, "missing token delegate callback context");
-        return ffi::status::INVALID_ARGUMENT;
+    let token = Token::from_raw(token_raw);
+    if token_raw.is_null() {
+        return invalid_arguments(error_out, "missing token delegate callback context");
     }
 
-    match catch_unwind(AssertUnwindSafe(|| -> Result<i32, CryptoTokenKitError> {
-        let state = unsafe { &*user_info.cast::<TokenDelegateState>() };
-        let token = Token::from_raw(token_raw);
-        let mut delegate = match state.delegate.lock() {
-            Ok(guard) => guard,
-            Err(poisoned) => poisoned.into_inner(),
-        };
-        let session = delegate.create_session(&token)?;
-        drop(delegate);
+    let invoke = |delegate: &TokenDelegateCell| -> Result<(), CryptoTokenKitError> {
+        let session = lock(delegate).create_session(&token)?;
         if !out_session.is_null() {
             unsafe {
                 *out_session = session.map_or(ptr::null_mut(), TokenSession::into_raw);
             }
         }
-        Ok(ffi::status::OK)
-    })) {
-        Ok(Ok(status)) => status,
-        Ok(Err(error)) => {
-            write_error_ptr(error_out, error.message());
-            failure_status(&error)
-        }
-        Err(_) => {
-            write_error_ptr(error_out, "panic in token create-session delegate callback");
-            ffi::status::FRAMEWORK_ERROR
-        }
-    }
+        Ok(())
+    };
+    let result = unsafe {
+        CallbackContext::<TokenDelegateCell>::with(
+            user_info,
+            "TokenDelegate::create_session",
+            invoke,
+        )
+    };
+    delegate_status(result, error_out, "token create-session")
 }
 
 unsafe extern "C" fn token_terminate_session_trampoline(
@@ -675,20 +652,19 @@ unsafe extern "C" fn token_terminate_session_trampoline(
     token_raw: *mut c_void,
     session_raw: *mut c_void,
 ) {
-    if user_info.is_null() || token_raw.is_null() || session_raw.is_null() {
+    let token = Token::from_raw(token_raw);
+    let session = TokenSession::from_raw(session_raw);
+    if token_raw.is_null() || session_raw.is_null() {
         return;
     }
 
-    let _ = catch_unwind(AssertUnwindSafe(|| {
-        let state = unsafe { &*user_info.cast::<TokenDelegateState>() };
-        let token = Token::from_raw(token_raw);
-        let session = TokenSession::from_raw(session_raw);
-        let mut delegate = match state.delegate.lock() {
-            Ok(guard) => guard,
-            Err(poisoned) => poisoned.into_inner(),
-        };
-        delegate.terminate_session(&token, &session);
-    }));
+    unsafe {
+        CallbackContext::<TokenDelegateCell>::with(
+            user_info,
+            "TokenDelegate::terminate_session",
+            |delegate| lock(delegate).terminate_session(&token, &session),
+        )
+    };
 }
 
 unsafe extern "C" fn token_driver_create_token_trampoline(
@@ -698,17 +674,15 @@ unsafe extern "C" fn token_driver_create_token_trampoline(
     out_token: *mut *mut c_void,
     error_out: *mut *mut c_char,
 ) -> i32 {
-    if user_info.is_null() || driver_raw.is_null() || configuration_json.is_null() {
-        write_error_ptr(
+    let driver = TokenDriver::from_raw(driver_raw);
+    if driver_raw.is_null() || configuration_json.is_null() {
+        return invalid_arguments(
             error_out,
             "missing token-driver delegate callback arguments",
         );
-        return ffi::status::INVALID_ARGUMENT;
     }
 
-    match catch_unwind(AssertUnwindSafe(|| -> Result<i32, CryptoTokenKitError> {
-        let state = unsafe { &*user_info.cast::<TokenDriverDelegateState>() };
-        let driver = TokenDriver::from_raw(driver_raw);
+    let invoke = |delegate: &DriverDelegateCell| -> Result<(), CryptoTokenKitError> {
         let configuration: TokenConfigurationSnapshot = serde_json::from_str(&c_string_to_string(
             configuration_json,
             "missing token configuration JSON",
@@ -718,32 +692,22 @@ unsafe extern "C" fn token_driver_create_token_trampoline(
                 "invalid token-driver configuration JSON: {error}"
             ))
         })?;
-        let mut delegate = match state.delegate.lock() {
-            Ok(guard) => guard,
-            Err(poisoned) => poisoned.into_inner(),
-        };
-        let token = delegate.token_for_configuration(&driver, &configuration)?;
-        drop(delegate);
+        let token = lock(delegate).token_for_configuration(&driver, &configuration)?;
         if !out_token.is_null() {
             unsafe {
                 *out_token = token.map_or(ptr::null_mut(), Token::into_raw);
             }
         }
-        Ok(ffi::status::OK)
-    })) {
-        Ok(Ok(status)) => status,
-        Ok(Err(error)) => {
-            write_error_ptr(error_out, error.message());
-            failure_status(&error)
-        }
-        Err(_) => {
-            write_error_ptr(
-                error_out,
-                "panic in token-driver create-token delegate callback",
-            );
-            ffi::status::FRAMEWORK_ERROR
-        }
-    }
+        Ok(())
+    };
+    let result = unsafe {
+        CallbackContext::<DriverDelegateCell>::with(
+            user_info,
+            "TokenDriverDelegate::token_for_configuration",
+            invoke,
+        )
+    };
+    delegate_status(result, error_out, "token-driver create-token")
 }
 
 unsafe extern "C" fn token_driver_terminate_token_trampoline(
@@ -751,20 +715,19 @@ unsafe extern "C" fn token_driver_terminate_token_trampoline(
     driver_raw: *mut c_void,
     token_raw: *mut c_void,
 ) {
-    if user_info.is_null() || driver_raw.is_null() || token_raw.is_null() {
+    let driver = TokenDriver::from_raw(driver_raw);
+    let token = Token::from_raw(token_raw);
+    if driver_raw.is_null() || token_raw.is_null() {
         return;
     }
 
-    let _ = catch_unwind(AssertUnwindSafe(|| {
-        let state = unsafe { &*user_info.cast::<TokenDriverDelegateState>() };
-        let driver = TokenDriver::from_raw(driver_raw);
-        let token = Token::from_raw(token_raw);
-        let mut delegate = match state.delegate.lock() {
-            Ok(guard) => guard,
-            Err(poisoned) => poisoned.into_inner(),
-        };
-        delegate.terminate_token(&driver, &token);
-    }));
+    unsafe {
+        CallbackContext::<DriverDelegateCell>::with(
+            user_info,
+            "TokenDriverDelegate::terminate_token",
+            |delegate| lock(delegate).terminate_token(&driver, &token),
+        )
+    };
 }
 
 unsafe extern "C" fn smart_card_token_driver_create_token_trampoline(
@@ -777,57 +740,37 @@ unsafe extern "C" fn smart_card_token_driver_create_token_trampoline(
     out_token: *mut *mut c_void,
     error_out: *mut *mut c_char,
 ) -> i32 {
-    if user_info.is_null() || driver_raw.is_null() || smart_card_raw.is_null() {
-        write_error_ptr(
+    let driver = SmartCardTokenDriver::from_raw(driver_raw);
+    let smart_card = SmartCard::from_raw(smart_card_raw);
+    let aid = if has_aid {
+        unsafe { callback_bytes(aid_ptr, aid_len) }.map(Some)
+    } else {
+        Some(None)
+    };
+    let (Some(aid), false) = (aid, driver_raw.is_null() || smart_card_raw.is_null()) else {
+        return invalid_arguments(
             error_out,
             "missing smart-card token-driver delegate callback arguments",
         );
-        return ffi::status::INVALID_ARGUMENT;
-    }
+    };
 
-    match catch_unwind(AssertUnwindSafe(|| -> Result<i32, CryptoTokenKitError> {
-        let state = unsafe { &*user_info.cast::<SmartCardTokenDriverDelegateState>() };
-        let driver = SmartCardTokenDriver::from_raw(driver_raw);
-        let smart_card = SmartCard::from_raw(smart_card_raw);
-        let aid = if has_aid {
-            // Swift's `Data.withUnsafeBytes` yields a null `baseAddress` for an empty
-            // `Data`, so an empty (but present) AID arrives as a null pointer with
-            // `has_aid == true`. `slice::from_raw_parts(null, 0)` is undefined behavior,
-            // so substitute an empty slice in that case while preserving `Some` semantics.
-            if aid_ptr.is_null() {
-                Some([].as_slice())
-            } else {
-                Some(unsafe { std::slice::from_raw_parts(aid_ptr, aid_len) })
-            }
-        } else {
-            None
-        };
-        let mut delegate = match state.delegate.lock() {
-            Ok(guard) => guard,
-            Err(poisoned) => poisoned.into_inner(),
-        };
-        let token = delegate.create_token_for_smart_card(&driver, &smart_card, aid)?;
-        drop(delegate);
+    let invoke = |delegate: &SmartCardDriverDelegateCell| -> Result<(), CryptoTokenKitError> {
+        let token = lock(delegate).create_token_for_smart_card(&driver, &smart_card, aid)?;
         if !out_token.is_null() {
             unsafe {
                 *out_token = token.map_or(ptr::null_mut(), SmartCardToken::into_raw);
             }
         }
-        Ok(ffi::status::OK)
-    })) {
-        Ok(Ok(status)) => status,
-        Ok(Err(error)) => {
-            write_error_ptr(error_out, error.message());
-            failure_status(&error)
-        }
-        Err(_) => {
-            write_error_ptr(
-                error_out,
-                "panic in smart-card token-driver create-token delegate callback",
-            );
-            ffi::status::FRAMEWORK_ERROR
-        }
-    }
+        Ok(())
+    };
+    let result = unsafe {
+        CallbackContext::<SmartCardDriverDelegateCell>::with(
+            user_info,
+            "SmartCardTokenDriverDelegate::create_token_for_smart_card",
+            invoke,
+        )
+    };
+    delegate_status(result, error_out, "smart-card token-driver create-token")
 }
 
 unsafe extern "C" fn smart_card_token_driver_terminate_token_trampoline(
@@ -835,20 +778,19 @@ unsafe extern "C" fn smart_card_token_driver_terminate_token_trampoline(
     driver_raw: *mut c_void,
     token_raw: *mut c_void,
 ) {
-    if user_info.is_null() || driver_raw.is_null() || token_raw.is_null() {
+    let driver = SmartCardTokenDriver::from_raw(driver_raw);
+    let token = SmartCardToken::from_raw(token_raw);
+    if driver_raw.is_null() || token_raw.is_null() {
         return;
     }
 
-    let _ = catch_unwind(AssertUnwindSafe(|| {
-        let state = unsafe { &*user_info.cast::<SmartCardTokenDriverDelegateState>() };
-        let driver = SmartCardTokenDriver::from_raw(driver_raw);
-        let token = SmartCardToken::from_raw(token_raw);
-        let mut delegate = match state.delegate.lock() {
-            Ok(guard) => guard,
-            Err(poisoned) => poisoned.into_inner(),
-        };
-        delegate.terminate_token(&driver, &token);
-    }));
+    unsafe {
+        CallbackContext::<SmartCardDriverDelegateCell>::with(
+            user_info,
+            "SmartCardTokenDriverDelegate::terminate_token",
+            |delegate| lock(delegate).terminate_token(&driver, &token),
+        )
+    };
 }
 
 impl TokenSession {
@@ -871,12 +813,8 @@ impl TokenSession {
     where
         D: TokenSessionDelegate + 'static,
     {
-        let state = Box::new(TokenSessionDelegateState {
-            delegate: Mutex::new(Box::new(delegate)),
-        });
-        let user_info = std::ptr::from_ref(state.as_ref())
-            .cast_mut()
-            .cast::<c_void>();
+        let cell: SessionDelegateCell = Mutex::new(Box::new(delegate));
+        let context = CallbackContext::new(cell);
         let mut raw = ptr::null_mut();
         let mut error_ptr = ptr::null_mut();
         let status = unsafe {
@@ -887,7 +825,8 @@ impl TokenSession {
                 Some(token_session_sign_trampoline),
                 Some(token_session_decrypt_trampoline),
                 Some(token_session_key_exchange_trampoline),
-                user_info,
+                context.retained_ptr(),
+                Some(CallbackContext::<SessionDelegateCell>::RELEASE),
                 &raw mut raw,
                 &raw mut error_ptr,
             )
@@ -898,7 +837,7 @@ impl TokenSession {
                 "Swift bridge returned a null token-session delegate handle".into(),
             ));
         }
-        Ok(TokenSessionDelegateHandle { raw, _state: state })
+        Ok(TokenSessionDelegateHandle { raw, context })
     }
 
     #[must_use]
@@ -1096,12 +1035,8 @@ impl Token {
     where
         D: TokenDelegate + 'static,
     {
-        let state = Box::new(TokenDelegateState {
-            delegate: Mutex::new(Box::new(delegate)),
-        });
-        let user_info = std::ptr::from_ref(state.as_ref())
-            .cast_mut()
-            .cast::<c_void>();
+        let cell: TokenDelegateCell = Mutex::new(Box::new(delegate));
+        let context = CallbackContext::new(cell);
         let mut raw = ptr::null_mut();
         let mut error_ptr = ptr::null_mut();
         let status = unsafe {
@@ -1109,7 +1044,8 @@ impl Token {
                 self.raw(),
                 Some(token_create_session_trampoline),
                 Some(token_terminate_session_trampoline),
-                user_info,
+                context.retained_ptr(),
+                Some(CallbackContext::<TokenDelegateCell>::RELEASE),
                 &raw mut raw,
                 &raw mut error_ptr,
             )
@@ -1120,7 +1056,7 @@ impl Token {
                 "Swift bridge returned a null token delegate handle".into(),
             ));
         }
-        Ok(TokenDelegateHandle { raw, _state: state })
+        Ok(TokenDelegateHandle { raw, context })
     }
 
     #[must_use]
@@ -1213,12 +1149,8 @@ impl TokenDriver {
     where
         D: TokenDriverDelegate + 'static,
     {
-        let state = Box::new(TokenDriverDelegateState {
-            delegate: Mutex::new(Box::new(delegate)),
-        });
-        let user_info = std::ptr::from_ref(state.as_ref())
-            .cast_mut()
-            .cast::<c_void>();
+        let cell: DriverDelegateCell = Mutex::new(Box::new(delegate));
+        let context = CallbackContext::new(cell);
         let mut raw = ptr::null_mut();
         let mut error_ptr = ptr::null_mut();
         let status = unsafe {
@@ -1226,7 +1158,8 @@ impl TokenDriver {
                 self.raw(),
                 Some(token_driver_create_token_trampoline),
                 Some(token_driver_terminate_token_trampoline),
-                user_info,
+                context.retained_ptr(),
+                Some(CallbackContext::<DriverDelegateCell>::RELEASE),
                 &raw mut raw,
                 &raw mut error_ptr,
             )
@@ -1237,7 +1170,7 @@ impl TokenDriver {
                 "Swift bridge returned a null token-driver delegate handle".into(),
             ));
         }
-        Ok(TokenDriverDelegateHandle { raw, _state: state })
+        Ok(TokenDriverDelegateHandle { raw, context })
     }
 
     #[must_use]
@@ -1291,12 +1224,8 @@ impl SmartCardTokenDriver {
     where
         D: SmartCardTokenDriverDelegate + 'static,
     {
-        let state = Box::new(SmartCardTokenDriverDelegateState {
-            delegate: Mutex::new(Box::new(delegate)),
-        });
-        let user_info = std::ptr::from_ref(state.as_ref())
-            .cast_mut()
-            .cast::<c_void>();
+        let cell: SmartCardDriverDelegateCell = Mutex::new(Box::new(delegate));
+        let context = CallbackContext::new(cell);
         let mut raw = ptr::null_mut();
         let mut error_ptr = ptr::null_mut();
         let status = unsafe {
@@ -1304,7 +1233,8 @@ impl SmartCardTokenDriver {
                 self.raw(),
                 Some(smart_card_token_driver_create_token_trampoline),
                 Some(smart_card_token_driver_terminate_token_trampoline),
-                user_info,
+                context.retained_ptr(),
+                Some(CallbackContext::<SmartCardDriverDelegateCell>::RELEASE),
                 &raw mut raw,
                 &raw mut error_ptr,
             )
@@ -1315,7 +1245,7 @@ impl SmartCardTokenDriver {
                 "Swift bridge returned a null smart-card token-driver delegate handle".into(),
             ));
         }
-        Ok(SmartCardTokenDriverDelegateHandle { raw, _state: state })
+        Ok(SmartCardTokenDriverDelegateHandle { raw, context })
     }
 
     #[must_use]
@@ -1363,5 +1293,85 @@ impl SmartCardTokenDriver {
                 token.raw(),
             );
         };
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use core::ffi::c_void;
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    use std::sync::Arc;
+
+    use super::{TokenKeyAlgorithm, TokenSessionDelegate};
+    use crate::error::CryptoTokenKitError;
+    use crate::token::Token;
+    use crate::token_driver::TokenDriver;
+    use crate::token_keychain_contents::TokenObjectId;
+    use crate::token_session::TokenSession;
+
+    unsafe extern "C" {
+        fn objc_retain(object: *mut c_void) -> *mut c_void;
+        fn objc_release(object: *mut c_void);
+    }
+
+    struct CountingDelegate {
+        calls: Arc<AtomicUsize>,
+        dropped: Arc<AtomicBool>,
+    }
+
+    impl Drop for CountingDelegate {
+        fn drop(&mut self) {
+            self.dropped.store(true, Ordering::SeqCst);
+        }
+    }
+
+    impl TokenSessionDelegate for CountingDelegate {
+        fn sign_data(
+            &mut self,
+            _session: &TokenSession,
+            data: &[u8],
+            _key_object_id: &TokenObjectId,
+            _algorithm: &TokenKeyAlgorithm,
+        ) -> Result<Vec<u8>, CryptoTokenKitError> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            Ok(data.to_vec())
+        }
+    }
+
+    fn sign(session: &TokenSession, data: &[u8]) -> Result<Vec<u8>, CryptoTokenKitError> {
+        session.invoke_delegate_sign_data(data, &TokenObjectId::new("key"), "com.example.base", &[])
+    }
+
+    #[test]
+    fn callbacks_after_the_handle_is_dropped_never_reach_the_delegate() {
+        let driver = TokenDriver::new();
+        let token = Token::new(&driver, "com.example.cryptotokenkit.late-callback").expect("token");
+        let session = TokenSession::new(&token);
+        let calls = Arc::new(AtomicUsize::new(0));
+        let dropped = Arc::new(AtomicBool::new(false));
+        let handle = session
+            .set_delegate(CountingDelegate {
+                calls: Arc::clone(&calls),
+                dropped: Arc::clone(&dropped),
+            })
+            .expect("delegate");
+
+        assert_eq!(sign(&session, b"live").expect("live callback"), b"live");
+        assert_eq!(sign(&session, b"").expect("empty data callback"), b"");
+        assert_eq!(calls.load(Ordering::SeqCst), 2);
+
+        let delegate_box = handle.raw;
+        unsafe { objc_retain(delegate_box) };
+        drop(handle);
+
+        assert!(session.has_delegate());
+        assert!(!dropped.load(Ordering::SeqCst));
+        let error = sign(&session, b"late").expect_err("late callback must fail");
+        assert!(error.message().contains("dropped"), "{error:?}");
+        assert_eq!(calls.load(Ordering::SeqCst), 2);
+
+        unsafe { objc_release(delegate_box) };
+        assert!(dropped.load(Ordering::SeqCst));
+        assert!(!session.has_delegate());
     }
 }

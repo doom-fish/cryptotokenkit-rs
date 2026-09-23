@@ -18,6 +18,22 @@ public func ctkBorrow<T: AnyObject>(_ ptr: UnsafeMutableRawPointer, as _: T.Type
     Unmanaged<T>.fromOpaque(ptr).takeUnretainedValue()
 }
 
+public typealias CTKContextRelease = @convention(c) (UnsafeMutableRawPointer?) -> Void
+
+final class CTKCallbackContext {
+    let pointer: UnsafeMutableRawPointer?
+    private let release: CTKContextRelease?
+
+    init(_ pointer: UnsafeMutableRawPointer?, release: CTKContextRelease?) {
+        self.pointer = pointer
+        self.release = release
+    }
+
+    deinit {
+        release?(pointer)
+    }
+}
+
 final class CTKPendingReply<Value> {
     private let lock = NSLock()
     private let semaphore = DispatchSemaphore(value: 0)

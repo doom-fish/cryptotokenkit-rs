@@ -102,7 +102,7 @@ private final class CTKTokenSessionDelegateBox: NSObject, TKTokenSessionDelegate
     private let signCallback: CTKTokenSessionDataCallback
     private let decryptCallback: CTKTokenSessionDataCallback
     private let keyExchangeCallback: CTKTokenSessionKeyExchangeCallback
-    private let userInfo: UnsafeMutableRawPointer?
+    private let context: CTKCallbackContext
 
     init(
         beginAuthCallback: @escaping CTKTokenSessionBeginAuthCallback,
@@ -110,14 +110,14 @@ private final class CTKTokenSessionDelegateBox: NSObject, TKTokenSessionDelegate
         signCallback: @escaping CTKTokenSessionDataCallback,
         decryptCallback: @escaping CTKTokenSessionDataCallback,
         keyExchangeCallback: @escaping CTKTokenSessionKeyExchangeCallback,
-        userInfo: UnsafeMutableRawPointer?
+        context: CTKCallbackContext
     ) {
         self.beginAuthCallback = beginAuthCallback
         self.supportsCallback = supportsCallback
         self.signCallback = signCallback
         self.decryptCallback = decryptCallback
         self.keyExchangeCallback = keyExchangeCallback
-        self.userInfo = userInfo
+        self.context = context
         super.init()
     }
 
@@ -131,7 +131,7 @@ private final class CTKTokenSessionDelegateBox: NSObject, TKTokenSessionDelegate
         var errorCString: UnsafeMutablePointer<CChar>?
         let status = constraintJSON.withCString { json in
             beginAuthCallback(
-                userInfo,
+                context.pointer,
                 ctkRetain(session),
                 Int32(operation.rawValue),
                 json,
@@ -159,7 +159,7 @@ private final class CTKTokenSessionDelegateBox: NSObject, TKTokenSessionDelegate
     ) -> Bool {
         objectID.withCString { objectIDCString in
             supportsCallback(
-                userInfo,
+                context.pointer,
                 ctkRetain(session),
                 Int32(operation.rawValue),
                 objectIDCString,
@@ -180,7 +180,7 @@ private final class CTKTokenSessionDelegateBox: NSObject, TKTokenSessionDelegate
         let status = data.withUnsafeBytes { bytes in
             objectID.withCString { objectIDCString in
                 callback(
-                    userInfo,
+                    context.pointer,
                     ctkRetain(session),
                     bytes.baseAddress?.assumingMemoryBound(to: UInt8.self),
                     data.count,
@@ -212,7 +212,7 @@ private final class CTKTokenSessionDelegateBox: NSObject, TKTokenSessionDelegate
         let status = publicKeyData.withUnsafeBytes { bytes in
             objectID.withCString { objectIDCString in
                 keyExchangeCallback(
-                    userInfo,
+                    context.pointer,
                     ctkRetain(session),
                     bytes.baseAddress?.assumingMemoryBound(to: UInt8.self),
                     publicKeyData.count,
@@ -315,16 +315,16 @@ private final class CTKTokenSessionDelegateBox: NSObject, TKTokenSessionDelegate
 private final class CTKTokenDelegateBox: NSObject, TKTokenDelegate {
     private let createSessionCallback: CTKTokenCreateSessionCallback
     private let terminateSessionCallback: CTKTokenTerminateSessionCallback
-    private let userInfo: UnsafeMutableRawPointer?
+    private let context: CTKCallbackContext
 
     init(
         createSessionCallback: @escaping CTKTokenCreateSessionCallback,
         terminateSessionCallback: @escaping CTKTokenTerminateSessionCallback,
-        userInfo: UnsafeMutableRawPointer?
+        context: CTKCallbackContext
     ) {
         self.createSessionCallback = createSessionCallback
         self.terminateSessionCallback = terminateSessionCallback
-        self.userInfo = userInfo
+        self.context = context
         super.init()
     }
 
@@ -334,7 +334,7 @@ private final class CTKTokenDelegateBox: NSObject, TKTokenDelegate {
     ) -> UnsafeMutableRawPointer? {
         var rawSession: UnsafeMutableRawPointer?
         var errorCString: UnsafeMutablePointer<CChar>?
-        let status = createSessionCallback(userInfo, ctkRetain(token), &rawSession, &errorCString)
+        let status = createSessionCallback(context.pointer, ctkRetain(token), &rawSession, &errorCString)
         guard status == CTK_OK else {
             ctkWriteCallbackError(
                 errorOut,
@@ -356,23 +356,23 @@ private final class CTKTokenDelegateBox: NSObject, TKTokenDelegate {
     }
 
     func token(_ token: TKToken, terminateSession session: TKTokenSession) {
-        terminateSessionCallback(userInfo, ctkRetain(token), ctkRetain(session))
+        terminateSessionCallback(context.pointer, ctkRetain(token), ctkRetain(session))
     }
 }
 
 private final class CTKTokenDriverDelegateBox: NSObject, TKTokenDriverDelegate {
     private let createTokenCallback: CTKTokenDriverCreateTokenCallback
     private let terminateTokenCallback: CTKTokenDriverTerminateTokenCallback
-    private let userInfo: UnsafeMutableRawPointer?
+    private let context: CTKCallbackContext
 
     init(
         createTokenCallback: @escaping CTKTokenDriverCreateTokenCallback,
         terminateTokenCallback: @escaping CTKTokenDriverTerminateTokenCallback,
-        userInfo: UnsafeMutableRawPointer?
+        context: CTKCallbackContext
     ) {
         self.createTokenCallback = createTokenCallback
         self.terminateTokenCallback = terminateTokenCallback
-        self.userInfo = userInfo
+        self.context = context
         super.init()
     }
 
@@ -384,7 +384,7 @@ private final class CTKTokenDriverDelegateBox: NSObject, TKTokenDriverDelegate {
         var rawToken: UnsafeMutableRawPointer?
         var errorCString: UnsafeMutablePointer<CChar>?
         let status = configurationJSON.withCString { json in
-            createTokenCallback(userInfo, ctkRetain(driver), json, &rawToken, &errorCString)
+            createTokenCallback(context.pointer, ctkRetain(driver), json, &rawToken, &errorCString)
         }
         guard status == CTK_OK else {
             ctkWriteCallbackError(
@@ -418,23 +418,23 @@ private final class CTKTokenDriverDelegateBox: NSObject, TKTokenDriverDelegate {
     }
 
     func tokenDriver(_ driver: TKTokenDriver, terminateToken token: TKToken) {
-        terminateTokenCallback(userInfo, ctkRetain(driver), ctkRetain(token))
+        terminateTokenCallback(context.pointer, ctkRetain(driver), ctkRetain(token))
     }
 }
 
 private final class CTKSmartCardTokenDriverDelegateBox: NSObject, TKSmartCardTokenDriverDelegate {
     private let createTokenCallback: CTKSmartCardTokenDriverCreateTokenCallback
     private let terminateTokenCallback: CTKSmartCardTokenDriverTerminateTokenCallback
-    private let userInfo: UnsafeMutableRawPointer?
+    private let context: CTKCallbackContext
 
     init(
         createTokenCallback: @escaping CTKSmartCardTokenDriverCreateTokenCallback,
         terminateTokenCallback: @escaping CTKSmartCardTokenDriverTerminateTokenCallback,
-        userInfo: UnsafeMutableRawPointer?
+        context: CTKCallbackContext
     ) {
         self.createTokenCallback = createTokenCallback
         self.terminateTokenCallback = terminateTokenCallback
-        self.userInfo = userInfo
+        self.context = context
         super.init()
     }
 
@@ -449,7 +449,7 @@ private final class CTKSmartCardTokenDriverDelegateBox: NSObject, TKSmartCardTok
         let status = aid.map({ aid in
             aid.withUnsafeBytes { bytes in
                 createTokenCallback(
-                    userInfo,
+                    context.pointer,
                     ctkRetain(driver),
                     ctkRetain(smartCard),
                     bytes.baseAddress?.assumingMemoryBound(to: UInt8.self),
@@ -460,7 +460,7 @@ private final class CTKSmartCardTokenDriverDelegateBox: NSObject, TKSmartCardTok
                 )
             }
         }) ?? createTokenCallback(
-            userInfo,
+            context.pointer,
             ctkRetain(driver),
             ctkRetain(smartCard),
             nil,
@@ -504,7 +504,7 @@ private final class CTKSmartCardTokenDriverDelegateBox: NSObject, TKSmartCardTok
     }
 
     func tokenDriver(_ driver: TKTokenDriver, terminateToken token: TKToken) {
-        terminateTokenCallback(userInfo, ctkRetain(driver), ctkRetain(token))
+        terminateTokenCallback(context.pointer, ctkRetain(driver), ctkRetain(token))
     }
 }
 
@@ -517,9 +517,11 @@ public func ctk_token_session_set_delegate(
     _ decryptCallback: CTKTokenSessionDataCallback?,
     _ keyExchangeCallback: CTKTokenSessionKeyExchangeCallback?,
     _ userInfo: UnsafeMutableRawPointer?,
+    _ release: CTKContextRelease?,
     _ outDelegate: UnsafeMutablePointer<UnsafeMutableRawPointer?>,
     _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> Int32 {
+    let context = CTKCallbackContext(userInfo, release: release)
     outDelegate.pointee = nil
     guard let sessionPtr else {
         ctkWriteError(errorOut, "missing token-session handle")
@@ -540,7 +542,7 @@ public func ctk_token_session_set_delegate(
         signCallback: signCallback,
         decryptCallback: decryptCallback,
         keyExchangeCallback: keyExchangeCallback,
-        userInfo: userInfo
+        context: context
     )
     session.delegate = box
     outDelegate.pointee = ctkRetain(box)
@@ -795,9 +797,11 @@ public func ctk_token_set_delegate(
     _ createSessionCallback: CTKTokenCreateSessionCallback?,
     _ terminateSessionCallback: CTKTokenTerminateSessionCallback?,
     _ userInfo: UnsafeMutableRawPointer?,
+    _ release: CTKContextRelease?,
     _ outDelegate: UnsafeMutablePointer<UnsafeMutableRawPointer?>,
     _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> Int32 {
+    let context = CTKCallbackContext(userInfo, release: release)
     outDelegate.pointee = nil
     guard let tokenPtr else {
         ctkWriteError(errorOut, "missing token handle")
@@ -811,7 +815,7 @@ public func ctk_token_set_delegate(
     let box = CTKTokenDelegateBox(
         createSessionCallback: createSessionCallback,
         terminateSessionCallback: terminateSessionCallback,
-        userInfo: userInfo
+        context: context
     )
     token.delegate = box
     outDelegate.pointee = ctkRetain(box)
@@ -884,9 +888,11 @@ public func ctk_token_driver_set_delegate(
     _ createTokenCallback: CTKTokenDriverCreateTokenCallback?,
     _ terminateTokenCallback: CTKTokenDriverTerminateTokenCallback?,
     _ userInfo: UnsafeMutableRawPointer?,
+    _ release: CTKContextRelease?,
     _ outDelegate: UnsafeMutablePointer<UnsafeMutableRawPointer?>,
     _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> Int32 {
+    let context = CTKCallbackContext(userInfo, release: release)
     outDelegate.pointee = nil
     guard let driverPtr else {
         ctkWriteError(errorOut, "missing token-driver handle")
@@ -900,7 +906,7 @@ public func ctk_token_driver_set_delegate(
     let box = CTKTokenDriverDelegateBox(
         createTokenCallback: createTokenCallback,
         terminateTokenCallback: terminateTokenCallback,
-        userInfo: userInfo
+        context: context
     )
     driver.delegate = box
     outDelegate.pointee = ctkRetain(box)
@@ -971,9 +977,11 @@ public func ctk_smart_card_token_driver_set_delegate(
     _ createTokenCallback: CTKSmartCardTokenDriverCreateTokenCallback?,
     _ terminateTokenCallback: CTKSmartCardTokenDriverTerminateTokenCallback?,
     _ userInfo: UnsafeMutableRawPointer?,
+    _ release: CTKContextRelease?,
     _ outDelegate: UnsafeMutablePointer<UnsafeMutableRawPointer?>,
     _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> Int32 {
+    let context = CTKCallbackContext(userInfo, release: release)
     outDelegate.pointee = nil
     guard let driverPtr else {
         ctkWriteError(errorOut, "missing smart-card token-driver handle")
@@ -987,7 +995,7 @@ public func ctk_smart_card_token_driver_set_delegate(
     let box = CTKSmartCardTokenDriverDelegateBox(
         createTokenCallback: createTokenCallback,
         terminateTokenCallback: terminateTokenCallback,
-        userInfo: userInfo
+        context: context
     )
     driver.delegate = box
     outDelegate.pointee = ctkRetain(box)

@@ -11,6 +11,7 @@ unsafe extern "C" {
         interaction: *mut c_void,
         callback: SmartCardUserInteractionEventCallback,
         user_info: *mut c_void,
+        release: super::ContextRelease,
         out_delegate: *mut *mut c_void,
         error_out: *mut *mut c_char,
     ) -> i32;

@@ -1,9 +1,9 @@
 use core::ffi::{c_char, c_void};
 use std::ffi::CStr;
-use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::ptr;
-use std::sync::Mutex;
+use std::sync::{Mutex, PoisonError};
 
+use doom_fish_utils::callback_context::CallbackContext;
 use serde::{Deserialize, Serialize};
 
 use crate::error::{from_swift, CryptoTokenKitError};
@@ -22,36 +22,30 @@ pub struct TokenWatcherTokenInfo {
     pub driver_name: Option<String>,
 }
 
-type TokenHandler = Box<dyn FnMut(String) + Send + 'static>;
+type TokenHandlerCell = Mutex<Box<dyn FnMut(String) + Send + 'static>>;
 
-struct CallbackState {
-    callback: Mutex<TokenHandler>,
-}
-
-#[allow(clippy::vec_box)]
 /// Wraps `TKTokenWatcher`.
 pub struct TokenWatcher {
     raw: *mut c_void,
-    insertion_state: Option<Box<CallbackState>>,
-    removal_states: Vec<Box<CallbackState>>,
+    insertion_context: Option<CallbackContext<TokenHandlerCell>>,
+    removal_contexts: Vec<CallbackContext<TokenHandlerCell>>,
 }
 
 unsafe extern "C" fn token_watcher_trampoline(user_info: *mut c_void, token_id: *const c_char) {
-    if user_info.is_null() || token_id.is_null() {
+    if token_id.is_null() {
         return;
     }
 
-    let _ = catch_unwind(AssertUnwindSafe(|| {
-        let state = unsafe { &*user_info.cast::<CallbackState>() };
+    let deliver = |callback: &TokenHandlerCell| {
         let token_id = unsafe { CStr::from_ptr(token_id) }
             .to_string_lossy()
             .into_owned();
-        let mut callback = match state.callback.lock() {
-            Ok(guard) => guard,
-            Err(poisoned) => poisoned.into_inner(),
-        };
+        let mut callback = callback.lock().unwrap_or_else(PoisonError::into_inner);
         callback(token_id);
-    }));
+    };
+    unsafe {
+        CallbackContext::<TokenHandlerCell>::with(user_info, "TokenWatcher handler", deliver)
+    };
 }
 
 impl TokenWatcher {
@@ -62,8 +56,8 @@ impl TokenWatcher {
         assert!(!raw.is_null(), "Swift bridge returned a null token watcher");
         Self {
             raw,
-            insertion_state: None,
-            removal_states: Vec::new(),
+            insertion_context: None,
+            removal_contexts: Vec::new(),
         }
     }
 
@@ -87,23 +81,20 @@ impl TokenWatcher {
         &mut self,
         callback: impl FnMut(String) + Send + 'static,
     ) -> Result<(), CryptoTokenKitError> {
-        let state = Box::new(CallbackState {
-            callback: Mutex::new(Box::new(callback)),
-        });
-        let user_info = std::ptr::from_ref(state.as_ref())
-            .cast_mut()
-            .cast::<c_void>();
+        let cell: TokenHandlerCell = Mutex::new(Box::new(callback));
+        let context = CallbackContext::new(cell);
         let mut error_ptr = ptr::null_mut();
         let status = unsafe {
             ffi::token_watcher::ctk_token_watcher_set_insertion_handler(
                 self.raw,
                 Some(token_watcher_trampoline),
-                user_info,
+                context.retained_ptr(),
+                Some(CallbackContext::<TokenHandlerCell>::RELEASE),
                 &raw mut error_ptr,
             )
         };
         status_result(status, error_ptr)?;
-        self.insertion_state = Some(state);
+        self.insertion_context = Some(context);
         Ok(())
     }
 
@@ -114,24 +105,21 @@ impl TokenWatcher {
         callback: impl FnMut(String) + Send + 'static,
     ) -> Result<(), CryptoTokenKitError> {
         let token_id = to_cstring(token_id)?;
-        let state = Box::new(CallbackState {
-            callback: Mutex::new(Box::new(callback)),
-        });
-        let user_info = std::ptr::from_ref(state.as_ref())
-            .cast_mut()
-            .cast::<c_void>();
+        let cell: TokenHandlerCell = Mutex::new(Box::new(callback));
+        let context = CallbackContext::new(cell);
         let mut error_ptr = ptr::null_mut();
         let status = unsafe {
             ffi::token_watcher::ctk_token_watcher_add_removal_handler(
                 self.raw,
                 token_id.as_ptr(),
                 Some(token_watcher_trampoline),
-                user_info,
+                context.retained_ptr(),
+                Some(CallbackContext::<TokenHandlerCell>::RELEASE),
                 &raw mut error_ptr,
             )
         };
         status_result(status, error_ptr)?;
-        self.removal_states.push(state);
+        self.removal_contexts.push(context);
         Ok(())
     }
 
@@ -164,6 +152,9 @@ impl Default for TokenWatcher {
 
 impl Drop for TokenWatcher {
     fn drop(&mut self) {
+        for context in self.insertion_context.iter().chain(&self.removal_contexts) {
+            context.deactivate();
+        }
         if !self.raw.is_null() {
             unsafe { ffi::ctk_object_release(self.raw) };
             self.raw = ptr::null_mut();
