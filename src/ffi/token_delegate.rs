@@ -177,8 +177,9 @@ unsafe extern "C" {
     pub fn ctk_token_driver_add_token_configuration_json(
         class_id: *const c_char,
         instance_id: *const c_char,
+        out_json: *mut *mut c_char,
         error_out: *mut *mut c_char,
-    ) -> *mut c_char;
+    ) -> i32;
     pub fn ctk_token_driver_remove_token_configuration(
         class_id: *const c_char,
         instance_id: *const c_char,

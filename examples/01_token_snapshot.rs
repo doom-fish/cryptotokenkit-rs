@@ -3,7 +3,10 @@ use cryptotokenkit::{Token, TokenDriver};
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let driver = TokenDriver::new();
     let token = Token::new(&driver, "com.example.cryptotokenkit.token")?;
-    token.set_configuration_data(Some(b"token-config"))?;
+    match token.set_configuration_data(Some(b"token-config")) {
+        Ok(()) => println!("configuration data stored"),
+        Err(error) => println!("configuration data not stored: {error}"),
+    }
 
     match token.configuration() {
         Ok(snapshot) => {

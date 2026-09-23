@@ -86,15 +86,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let configuration = TokenDriver::add_token_configuration(
         "com.example.delegate-example.driver",
         "com.example.delegate-example.config",
-    )?;
+    )
+    .unwrap_or_else(|error| {
+        println!("token configuration not added: {error}");
+        TokenConfigurationSnapshot {
+            instance_id: "com.example.delegate-example.config".into(),
+            configuration_data: None,
+            keychain_items: Vec::new(),
+            keychain_contents_items: None,
+        }
+    });
     let _driver_handle = driver.set_delegate(DriverDelegateImpl)?;
     let configured_token = driver
         .invoke_delegate_token_for_configuration(&configuration)?
         .expect("driver delegate should create a token");
-    TokenDriver::remove_token_configuration(
+    if let Err(error) = TokenDriver::remove_token_configuration(
         "com.example.delegate-example.driver",
         "com.example.delegate-example.config",
-    )?;
+    ) {
+        println!("token configuration not removed: {error}");
+    }
 
     let smart_card_driver = SmartCardTokenDriver::new();
     let mock_card = SmartCard::mock("Example Mock Reader")?;

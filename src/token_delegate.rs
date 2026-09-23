@@ -1106,21 +1106,23 @@ impl TokenDriver {
     ) -> Result<TokenConfigurationSnapshot, CryptoTokenKitError> {
         let class_id = to_cstring(class_id)?;
         let instance_id = to_cstring(instance_id)?;
+        let mut json_ptr = ptr::null_mut();
         let mut error_ptr = ptr::null_mut();
-        let ptr = unsafe {
+        let status = unsafe {
             ffi::token_delegate::ctk_token_driver_add_token_configuration_json(
                 class_id.as_ptr(),
                 instance_id.as_ptr(),
+                &raw mut json_ptr,
                 &raw mut error_ptr,
             )
         };
-        if ptr.is_null() {
-            return Err(crate::error::from_swift(
-                ffi::status::FRAMEWORK_ERROR,
-                error_ptr,
+        status_result(status, error_ptr)?;
+        if json_ptr.is_null() {
+            return Err(CryptoTokenKitError::FrameworkError(
+                "Swift bridge returned a null token configuration".into(),
             ));
         }
-        decode_json(ptr)
+        decode_json(json_ptr)
     }
 
     /// Wraps the corresponding `TKTokenDriver` operation.

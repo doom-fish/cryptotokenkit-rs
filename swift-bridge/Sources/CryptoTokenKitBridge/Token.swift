@@ -1,26 +1,6 @@
 import CryptoTokenKit
 import Foundation
 
-private let ctkTokenConfigurationDataLock = NSLock()
-private var ctkTokenConfigurationDataStore: [ObjectIdentifier: Data] = [:]
-
-private func ctkStoredConfigurationData(for token: TKToken) -> Data? {
-    ctkTokenConfigurationDataLock.lock()
-    defer { ctkTokenConfigurationDataLock.unlock() }
-    return ctkTokenConfigurationDataStore[ObjectIdentifier(token)]
-}
-
-private func ctkSetStoredConfigurationData(_ data: Data?, for token: TKToken) {
-    ctkTokenConfigurationDataLock.lock()
-    defer { ctkTokenConfigurationDataLock.unlock() }
-    let key = ObjectIdentifier(token)
-    if let data {
-        ctkTokenConfigurationDataStore[key] = data
-    } else {
-        ctkTokenConfigurationDataStore.removeValue(forKey: key)
-    }
-}
-
 @_cdecl("ctk_token_new")
 public func ctk_token_new(
     _ driverPtr: UnsafeMutableRawPointer?,
@@ -102,11 +82,10 @@ public func ctk_token_configuration_json(
         ctkWriteError(errorOut, "token.configuration requires macOS 10.15 or newer")
         return nil
     }
-    var dictionary = ctkTokenConfigurationDictionary(
+    let dictionary = ctkTokenConfigurationDictionary(
         token.configuration,
         keychainContents: token.keychainContents
     )
-    dictionary["configurationData"] = ctkBytes(ctkStoredConfigurationData(for: token)) ?? NSNull()
     return ctkCString(ctkJSONString(dictionary))
 }
 
@@ -125,9 +104,17 @@ public func ctk_token_set_configuration_data(
     let token: TKToken = ctkBorrow(tokenPtr)
     guard #available(macOS 10.15, *) else {
         ctkWriteError(errorOut, "token.configuration requires macOS 10.15 or newer")
-        return CTK_FRAMEWORK_ERROR
+        return CTK_UNSUPPORTED
     }
-    let data = hasData ? dataPtr.map { Data(bytes: $0, count: dataLen) } : nil
-    ctkSetStoredConfigurationData(data, for: token)
+    let data = hasData ? dataPtr.map { Data(bytes: $0, count: dataLen) } ?? Data() : nil
+    let configuration = token.configuration
+    configuration.configurationData = data
+    guard configuration.configurationData == data else {
+        ctkWriteError(
+            errorOut,
+            "CryptoTokenKit did not store the configuration data; only the app that contains the token extension can change its token configurations"
+        )
+        return CTK_UNSUPPORTED
+    }
     return CTK_OK
 }

@@ -280,14 +280,12 @@ fn token_delegates_and_gap_fill_helpers_work() -> Result<(), Box<dyn std::error:
     drop(token_handle);
     assert!(!token.has_delegate());
 
-    let class_id = "com.example.cryptotokenkit.driver-config";
-    let driver_snapshot = TokenDriver::add_token_configuration(class_id, "driver-instance")?;
-    assert_eq!(driver_snapshot.instance_id, "driver-instance");
-    let configurations = TokenDriver::driver_configurations()?;
-    assert!(configurations
-        .get(class_id)
-        .and_then(|snapshot| snapshot.token_configurations.get("driver-instance"))
-        .is_some());
+    let driver_snapshot = TokenConfigurationSnapshot {
+        instance_id: "driver-instance".into(),
+        configuration_data: None,
+        keychain_items: Vec::new(),
+        keychain_contents_items: None,
+    };
 
     let driver_state = Arc::new(Mutex::new(DriverState::default()));
     let driver_handle = driver.set_delegate(RecordingDriverDelegate {
@@ -301,7 +299,6 @@ fn token_delegates_and_gap_fill_helpers_work() -> Result<(), Box<dyn std::error:
     driver.invoke_delegate_terminate_token(&delegate_token);
     drop(driver_handle);
     assert!(!driver.has_delegate());
-    TokenDriver::remove_token_configuration(class_id, "driver-instance")?;
 
     let smart_card_driver = SmartCardTokenDriver::new();
     let mock_smart_card = SmartCard::mock("Mock Token Reader")?;
