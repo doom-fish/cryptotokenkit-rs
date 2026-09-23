@@ -9,7 +9,7 @@ description = "Safe Rust bindings for Apple's CryptoTokenKit framework — token
 authors = ["Per Johansson <per@doom.fish>"]
 keywords = ["cryptotokenkit", "smartcard", "piv", "fido2", "macos"]
 categories = ["api-bindings", "os::macos-apis", "authentication"]
-rust-version = "1.76"
+rust-version = "1.82"
 readme = "README.md"
 build = "build.rs"
 include = [
@@ -39,10 +39,10 @@ crate-type = ["lib"]
 
 [features]
 default = []
-async = ["dep:doom-fish-utils", "doom-fish-utils/futures-stream"]
+async = ["doom-fish-utils/futures-stream"]
 
 [dependencies]
-doom-fish-utils = { path = "../doom-fish-utils", version = ">=0.3, <0.4", optional = true }
+doom-fish-utils = { path = "../doom-fish-utils", version = ">=0.4.1, <0.5" }
 libc = "0.2"
 serde = { version = "1", features = ["derive"] }
 serde_bytes = "0.11"
