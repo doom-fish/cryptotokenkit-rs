@@ -1,7 +1,8 @@
-use core::ffi::c_void;
+use core::ffi::{c_char, c_void};
 use std::ptr;
 
 use serde::{Deserialize, Serialize};
+use zeroize::{Zeroize, Zeroizing};
 
 use crate::error::CryptoTokenKitError;
 use crate::ffi;
@@ -41,7 +42,63 @@ struct TokenSmartCardPinAuthOperationSnapshot {
     pub apdu_template: Option<Vec<u8>>,
     pub pin_byte_offset: i64,
     pub has_smart_card: bool,
-    pub pin: Option<String>,
+}
+
+type SecretGetter =
+    unsafe extern "C" fn(*mut c_void, *mut *mut u8, *mut usize, *mut *mut c_char) -> i32;
+type SecretSetter =
+    unsafe extern "C" fn(*mut c_void, *const u8, usize, bool, *mut *mut c_char) -> i32;
+
+fn read_secret(
+    operation: *mut c_void,
+    getter: SecretGetter,
+) -> Result<Option<Zeroizing<String>>, CryptoTokenKitError> {
+    let mut bytes = ptr::null_mut();
+    let mut len = 0usize;
+    let mut error_ptr = ptr::null_mut();
+    let status = unsafe { getter(operation, &raw mut bytes, &raw mut len, &raw mut error_ptr) };
+    status_result(status, error_ptr)?;
+    if bytes.is_null() {
+        return Ok(None);
+    }
+    let owned = unsafe { std::slice::from_raw_parts(bytes, len) }.to_vec();
+    unsafe { std::slice::from_raw_parts_mut(bytes, len) }.zeroize();
+    unsafe { libc::free(bytes.cast()) };
+    match String::from_utf8(owned) {
+        Ok(secret) => Ok(Some(Zeroizing::new(secret))),
+        Err(error) => {
+            error.into_bytes().zeroize();
+            Err(CryptoTokenKitError::FrameworkError(
+                "the framework returned a secret that is not valid UTF-8".into(),
+            ))
+        }
+    }
+}
+
+fn write_secret(
+    operation: *mut c_void,
+    setter: SecretSetter,
+    secret: Option<&str>,
+    kind: &str,
+) -> Result<(), CryptoTokenKitError> {
+    if secret.is_some_and(|secret| secret.as_bytes().contains(&0)) {
+        return Err(CryptoTokenKitError::InvalidArgument(format!(
+            "{kind} must not contain NUL bytes"
+        )));
+    }
+    let (secret_ptr, secret_len) =
+        secret.map_or((ptr::null(), 0), |secret| (secret.as_ptr(), secret.len()));
+    let mut error_ptr = ptr::null_mut();
+    let status = unsafe {
+        setter(
+            operation,
+            secret_ptr,
+            secret_len,
+            secret.is_some(),
+            &raw mut error_ptr,
+        )
+    };
+    status_result(status, error_ptr)
 }
 
 impl TokenSession {
@@ -192,41 +249,21 @@ impl TokenPasswordAuthOperation {
     }
 
     /// Wraps the corresponding `TKTokenPasswordAuthOperation` operation.
-    pub fn password(&self) -> Result<Option<String>, CryptoTokenKitError> {
-        let ptr =
-            unsafe { ffi::token_session::ctk_token_password_auth_operation_password(self.raw) };
-        if ptr.is_null() {
-            return Ok(None);
-        }
-        Ok(Some(crate::error::take_owned_c_string(ptr)))
+    pub fn password(&self) -> Result<Option<Zeroizing<String>>, CryptoTokenKitError> {
+        read_secret(
+            self.raw,
+            ffi::token_session::ctk_token_password_auth_operation_password,
+        )
     }
 
     /// Sets the corresponding `TKTokenPasswordAuthOperation` value.
     pub fn set_password(&self, password: Option<&str>) -> Result<(), CryptoTokenKitError> {
-        let mut error_ptr = ptr::null_mut();
-        let (status, _storage) = if let Some(password) = password {
-            let storage = crate::private::to_cstring(password)?;
-            let status = unsafe {
-                ffi::token_session::ctk_token_password_auth_operation_set_password(
-                    self.raw,
-                    storage.as_ptr(),
-                    true,
-                    &raw mut error_ptr,
-                )
-            };
-            (status, Some(storage))
-        } else {
-            let status = unsafe {
-                ffi::token_session::ctk_token_password_auth_operation_set_password(
-                    self.raw,
-                    ptr::null(),
-                    false,
-                    &raw mut error_ptr,
-                )
-            };
-            (status, None)
-        };
-        status_result(status, error_ptr)
+        write_secret(
+            self.raw,
+            ffi::token_session::ctk_token_password_auth_operation_set_password,
+            password,
+            "passwords",
+        )
     }
 
     /// Invokes the corresponding `TKTokenPasswordAuthOperation` operation.
@@ -360,15 +397,21 @@ impl TokenSmartCardPinAuthOperation {
     }
 
     /// Wraps the corresponding `TKTokenSmartCardPINAuthOperation` operation.
-    pub fn pin(&self) -> Result<Option<String>, CryptoTokenKitError> {
-        Ok(self.snapshot()?.pin)
+    pub fn pin(&self) -> Result<Option<Zeroizing<String>>, CryptoTokenKitError> {
+        read_secret(
+            self.raw,
+            ffi::token_session::ctk_token_smart_card_pin_auth_operation_pin,
+        )
     }
 
     /// Sets the corresponding `TKTokenSmartCardPINAuthOperation` value.
     pub fn set_pin(&self, pin: Option<&str>) -> Result<(), CryptoTokenKitError> {
-        let mut snapshot = self.snapshot()?;
-        snapshot.pin = pin.map(str::to_owned);
-        self.update(&snapshot)
+        write_secret(
+            self.raw,
+            ffi::token_session::ctk_token_smart_card_pin_auth_operation_set_pin,
+            pin,
+            "PINs",
+        )
     }
 
     /// Invokes the corresponding `TKTokenSmartCardPINAuthOperation` operation.
@@ -405,3 +448,31 @@ impl_drop_release!(SmartCardTokenSession);
 impl_drop_release!(TokenAuthOperation);
 impl_drop_release!(TokenPasswordAuthOperation);
 impl_drop_release!(TokenSmartCardPinAuthOperation);
+
+#[cfg(test)]
+mod tests {
+    use super::TokenSmartCardPinAuthOperation;
+    use crate::ffi;
+
+    #[test]
+    fn the_pin_never_enters_the_json_snapshot() {
+        let operation = TokenSmartCardPinAuthOperation::new();
+        operation.set_pin(Some("97531")).expect("set pin");
+        operation
+            .set_pin_byte_offset(1)
+            .expect("snapshot update keeps working");
+        let json = crate::error::take_owned_c_string(unsafe {
+            ffi::token_session::ctk_token_smart_card_pin_auth_operation_json(operation.raw)
+        });
+        assert!(json.contains("pinByteOffset"), "{json}");
+        assert!(!json.contains("97531"), "{json}");
+        assert_eq!(
+            operation
+                .pin()
+                .expect("pin")
+                .as_ref()
+                .map(|pin| pin.as_str()),
+            Some("97531")
+        );
+    }
+}

@@ -17,10 +17,16 @@ unsafe extern "C" {
     ) -> i32;
 
     pub fn ctk_token_password_auth_operation_new() -> *mut c_void;
-    pub fn ctk_token_password_auth_operation_password(operation: *mut c_void) -> *mut c_char;
+    pub fn ctk_token_password_auth_operation_password(
+        operation: *mut c_void,
+        out_bytes: *mut *mut u8,
+        out_len: *mut usize,
+        error_out: *mut *mut c_char,
+    ) -> i32;
     pub fn ctk_token_password_auth_operation_set_password(
         operation: *mut c_void,
-        password: *const c_char,
+        password_ptr: *const u8,
+        password_len: usize,
         has_password: bool,
         error_out: *mut *mut c_char,
     ) -> i32;
@@ -30,6 +36,19 @@ unsafe extern "C" {
     pub fn ctk_token_smart_card_pin_auth_operation_update_json(
         operation: *mut c_void,
         json: *const c_char,
+        error_out: *mut *mut c_char,
+    ) -> i32;
+    pub fn ctk_token_smart_card_pin_auth_operation_pin(
+        operation: *mut c_void,
+        out_bytes: *mut *mut u8,
+        out_len: *mut usize,
+        error_out: *mut *mut c_char,
+    ) -> i32;
+    pub fn ctk_token_smart_card_pin_auth_operation_set_pin(
+        operation: *mut c_void,
+        pin_ptr: *const u8,
+        pin_len: usize,
+        has_pin: bool,
         error_out: *mut *mut c_char,
     ) -> i32;
     pub fn ctk_token_smart_card_pin_auth_operation_set_smart_card(
