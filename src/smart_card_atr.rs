@@ -1,6 +1,6 @@
 use core::ffi::c_void;
-use std::panic::{catch_unwind, AssertUnwindSafe};
 
+use doom_fish_utils::panic_safe::catch_user_panic_result;
 use serde::{Deserialize, Serialize};
 
 use crate::ffi;
@@ -69,6 +69,9 @@ pub struct TlvRecord {
 impl TlvRecord {
     /// Wraps the corresponding `TKTLVRecord` operation.
     pub fn ber(tag: u64, value: &[u8]) -> Option<Self> {
+        if tag == 0 {
+            return None;
+        }
         let ptr = unsafe {
             ffi::smart_card_atr::ctk_ber_tlv_record_json(tag, value.as_ptr(), value.len())
         };
@@ -77,12 +80,18 @@ impl TlvRecord {
 
     /// Wraps the corresponding `TKTLVRecord` operation.
     pub fn ber_tag_data(tag: u64) -> Option<Vec<u8>> {
+        if tag == 0 {
+            return None;
+        }
         let ptr = unsafe { ffi::smart_card_atr::ctk_ber_tlv_tag_data_json(tag) };
         decode_optional_json(ptr).ok().flatten()
     }
 
     /// Wraps the corresponding `TKTLVRecord` operation.
     pub fn ber_constructed(tag: u64, records: &[Self]) -> Option<Self> {
+        if tag == 0 || !records.iter().all(Self::is_constructible) {
+            return None;
+        }
         let payload = encode_json_cstring(records).ok()?;
         let ptr = unsafe {
             ffi::smart_card_atr::ctk_ber_tlv_record_with_records_json(tag, payload.as_ptr())
@@ -92,6 +101,9 @@ impl TlvRecord {
 
     /// Wraps the corresponding `TKTLVRecord` operation.
     pub fn simple(tag: u8, value: &[u8]) -> Option<Self> {
+        if value.len() > MAX_SIMPLE_TLV_VALUE_LEN {
+            return None;
+        }
         let ptr = unsafe {
             ffi::smart_card_atr::ctk_simple_tlv_record_json(tag, value.as_ptr(), value.len())
         };
@@ -100,10 +112,26 @@ impl TlvRecord {
 
     /// Wraps the corresponding `TKTLVRecord` operation.
     pub fn compact(tag: u8, value: &[u8]) -> Option<Self> {
+        if tag > MAX_COMPACT_TLV_TAG || value.len() > MAX_COMPACT_TLV_VALUE_LEN {
+            return None;
+        }
         let ptr = unsafe {
             ffi::smart_card_atr::ctk_compact_tlv_record_json(tag, value.as_ptr(), value.len())
         };
         decode_optional_json(ptr).ok().flatten()
+    }
+
+    fn is_constructible(&self) -> bool {
+        match self.encoding {
+            TlvEncoding::Ber => self.tag != 0,
+            TlvEncoding::Simple => {
+                u8::try_from(self.tag).is_ok() && self.value.len() <= MAX_SIMPLE_TLV_VALUE_LEN
+            }
+            TlvEncoding::Compact => {
+                self.tag <= u64::from(MAX_COMPACT_TLV_TAG)
+                    && self.value.len() <= MAX_COMPACT_TLV_VALUE_LEN
+            }
+        }
     }
 
     /// Parses data with the corresponding `TKTLVRecord` helper.
@@ -131,11 +159,17 @@ impl TlvRecord {
         while !remaining.is_empty() {
             let (record, consumed) = parse_tlv_record_prefix(encoding, remaining)?;
             records.push(record);
-            remaining = &remaining[consumed..];
+            remaining = remaining.get(consumed..)?;
         }
         Some(records)
     }
 }
+
+const MAX_BER_TAG_BYTES: usize = 8;
+const MAX_BER_LENGTH_BYTES: usize = 8;
+const MAX_SIMPLE_TLV_VALUE_LEN: usize = 0xFFFF;
+const MAX_COMPACT_TLV_TAG: u8 = 0x0F;
+const MAX_COMPACT_TLV_VALUE_LEN: usize = 0x0F;
 
 fn parse_tlv_sequence_with_fallback(data: &[u8]) -> Option<Vec<TlvRecord>> {
     let mut remaining = data;
@@ -145,7 +179,7 @@ fn parse_tlv_sequence_with_fallback(data: &[u8]) -> Option<Vec<TlvRecord>> {
             .or_else(|| parse_tlv_record_prefix(TlvEncoding::Simple, remaining))
             .or_else(|| parse_tlv_record_prefix(TlvEncoding::Compact, remaining))?;
         records.push(record);
-        remaining = &remaining[consumed..];
+        remaining = remaining.get(consumed..)?;
     }
     Some(records)
 }
@@ -160,16 +194,9 @@ fn parse_tlv_record_prefix(encoding: TlvEncoding, data: &[u8]) -> Option<(TlvRec
 
 fn parse_compact_record_prefix(data: &[u8]) -> Option<(TlvRecord, usize)> {
     let header = *data.first()?;
-    let len = usize::from(header & 0x0F);
-    let total = 1 + len;
-    if data.len() < total {
-        return None;
-    }
-    let tag = u64::from(header >> 4);
-    let value = &data[1..total];
-    u8::try_from(tag)
-        .ok()
-        .and_then(|tag| TlvRecord::compact(tag, value).map(|record| (record, total)))
+    let total = 1 + usize::from(header & 0x0F);
+    let value = data.get(1..total)?;
+    TlvRecord::compact(header >> 4, value).map(|record| (record, total))
 }
 
 fn parse_simple_record_prefix(data: &[u8]) -> Option<(TlvRecord, usize)> {
@@ -178,18 +205,15 @@ fn parse_simple_record_prefix(data: &[u8]) -> Option<(TlvRecord, usize)> {
         return None;
     }
     let length_marker = *data.get(1)?;
-    let (header_len, value_len) = if length_marker == 0xFF {
+    let (header_len, value_len): (usize, usize) = if length_marker == 0xFF {
         let high = *data.get(2)?;
         let low = *data.get(3)?;
         (4, usize::from(u16::from_be_bytes([high, low])))
     } else {
         (2, usize::from(length_marker))
     };
-    let total = header_len + value_len;
-    if data.len() < total {
-        return None;
-    }
-    let value = &data[header_len..total];
+    let total = header_len.checked_add(value_len)?;
+    let value = data.get(header_len..total)?;
     TlvRecord::simple(tag, value).map(|record| (record, total))
 }
 
@@ -200,41 +224,38 @@ fn parse_ber_record_prefix(data: &[u8]) -> Option<(TlvRecord, usize)> {
         loop {
             let byte = *data.get(tag_len)?;
             tag_len += 1;
+            if tag_len > MAX_BER_TAG_BYTES {
+                return None;
+            }
             if byte & 0x80 == 0 {
                 break;
             }
-            if tag_len > 8 {
-                return None;
-            }
         }
     }
-    let tag_bytes = &data[..tag_len];
-    let mut tag = 0u64;
-    for byte in tag_bytes {
-        tag = (tag << 8) | u64::from(*byte);
-    }
+    let tag = data
+        .get(..tag_len)?
+        .iter()
+        .fold(0u64, |tag, byte| (tag << 8) | u64::from(*byte));
 
     let length_byte = *data.get(tag_len)?;
     let (length_len, value_len) = if length_byte & 0x80 == 0 {
         (1, usize::from(length_byte))
     } else {
         let count = usize::from(length_byte & 0x7F);
-        if count == 0 || count > 8 {
+        if count == 0 || count > MAX_BER_LENGTH_BYTES {
             return None;
         }
-        let length_bytes = data.get(tag_len + 1..tag_len + 1 + count)?;
-        let mut value_len = 0usize;
-        for byte in length_bytes {
-            value_len = (value_len << 8) | usize::from(*byte);
-        }
+        let start = tag_len.checked_add(1)?;
+        let length_bytes = data.get(start..start.checked_add(count)?)?;
+        let value_len = length_bytes.iter().try_fold(0usize, |len, byte| {
+            len.checked_mul(256)?.checked_add(usize::from(*byte))
+        })?;
         (1 + count, value_len)
     };
 
-    let total = tag_len + length_len + value_len;
-    if data.len() < total {
-        return None;
-    }
-    let value = &data[tag_len + length_len..total];
+    let header_len = tag_len.checked_add(length_len)?;
+    let total = header_len.checked_add(value_len)?;
+    let value = data.get(header_len..total)?;
     TlvRecord::ber(tag, value).map(|record| (record, total))
 }
 
@@ -289,12 +310,12 @@ where
 
     // SAFETY: user_info is null-checked above and points to a valid AtrSourceState<F>
     // kept alive by the caller for the duration of the synchronous parse call.
-    // The user-supplied closure may panic, so it is wrapped in catch_unwind to
+    // The user-supplied closure may panic, so it runs inside catch_user_panic_result to
     // prevent unwinding across the FFI boundary (which would be undefined behavior).
-    catch_unwind(AssertUnwindSafe(|| {
+    catch_user_panic_result("SmartCardAtr::parse_from_source", || {
         let state = unsafe { &mut *user_info.cast::<AtrSourceState<F>>() };
         (state.callback)().map_or(-1, i32::from)
-    }))
+    })
     .unwrap_or(-1)
 }
 
