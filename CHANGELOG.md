@@ -1,5 +1,94 @@
 # Changelog
 
+All notable changes to `cryptotokenkit-rs` are documented here.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.4.0] - Unreleased
+
+### Security
+
+- `TlvRecord::parse`, `parse_with_encoding` and the sequence parsers no longer
+  panic on card-supplied lengths. An overflowing BER length field, a BER tag
+  longer than 8 bytes and truncated input now return `None`.
+- Card data starting with a `0x00` byte could abort the process: the parser
+  passed BER tag 0 to CryptoTokenKit, which raises an Objective-C exception.
+  `TlvRecord::ber`, `ber_tag_data`, `ber_constructed`, `simple` and `compact`
+  now return `None` for inputs the framework rejects with an exception (BER
+  tag 0, compact tags above 15 or values over 15 bytes, simple values over
+  65535 bytes, and such records as constructed children).
+- Dropping a token-session, token, token-driver, smart-card token-driver or
+  smart-card user-interaction delegate handle, a `SlotStateObserver` or a
+  `TokenWatcher`, or replacing the watcher's insertion handler, freed Rust
+  state that a callback in flight could still read. The Swift side now owns a
+  `CallbackContext` reference, and late callbacks no longer reach the dropped
+  delegate.
+- `SmartCardSlotManager::get_slot_with_name` wrote its reply into the caller's
+  stack even after the 30 s timeout had returned to Rust.
+- PINs and passwords no longer pass through the bridge's JSON snapshots or
+  NUL-terminated copies. `pin()` and `password()` return `Zeroizing<String>`,
+  and the buffer the Swift bridge hands to Rust is wiped before it is freed.
+- A framework call that failed without an `NSError` (for example
+  `TokenSmartCardPinAuthOperation::finish` without a smart card) was reported
+  as success. It is now `CryptoTokenKitError::FrameworkError`.
+
+### Fixed
+
+- Bridge statuses no longer share values with `TKError` codes. A card's
+  `CorruptedData` error was reported as `TimedOut`, `NotImplemented` as
+  `InvalidArgument` and `CommunicationError` as `FrameworkError`, and
+  `framework_code()` returned an SDK code for bridge failures. Only
+  `TKErrorDomain` codes are passed through, and errors returned by Rust
+  delegates reach CryptoTokenKit as `TKError` codes.
+- The Swift bridge trapped on `NSError` codes outside the `Int32` range.
+- `SmartCard::send_ins` rejects `le` above 65536 instead of passing a negative
+  value to the framework.
+- `SmartCard::with_session` ends the session when the callback panics.
+- A smart-card session that begins after the 30 s timeout is ended again, a
+  timed-out `SmartCardUserInteraction::run` cancels the interaction, and `run`
+  waits for the interaction's configured timeouts (up to an hour).
+- Sign, decrypt, key-exchange and create-token delegate callbacks accept empty
+  data instead of rejecting it as a missing argument.
+- Retained framework objects passed to a delegate trampoline are released when
+  the trampoline returns early.
+- `TokenDriver::add_token_configuration`, `remove_token_configuration` and
+  `Token::set_configuration_data` stored their values in process-local
+  dictionaries (the configuration data keyed by object address, so a later
+  token could read another token's data). They now use the framework.
+
+### Changed
+
+- **Breaking:** `TokenPasswordAuthOperation::password` and
+  `TokenSmartCardPinAuthOperation::pin` return
+  `Result<Option<Zeroizing<String>>, CryptoTokenKitError>`.
+- **Breaking:** `TokenDriver::add_token_configuration`,
+  `remove_token_configuration` and `Token::set_configuration_data` return
+  `CryptoTokenKitError::Unsupported` outside the app that contains the token
+  extension, and `TokenDriver::driver_configurations` only lists the
+  configurations CryptoTokenKit reports.
+- **Breaking:** `CryptoTokenKitError::code()` returns -1001 to -1004 for the
+  bridge variants (`InvalidArgument`, `FrameworkError`, `TimedOut`,
+  `Unsupported`) instead of values that collided with `TKErrorCode`.
+- **Breaking:** `TKErrorCode` is `#[non_exhaustive]`.
+- `doom-fish-utils` is now a regular dependency (`>=0.4.1, <0.5`); the `async`
+  feature only enables its `futures-stream` support.
+- New dependency `zeroize` (`>=1.6, <1.9`; 1.9 needs Rust 1.85).
+- `rust-version` is now 1.82.
+
+### Added
+
+- `TKErrorCode::InvalidatedDeviceKey` (`-10`, SDK 27.0).
+- `CryptoTokenKitError::Unsupported`.
+
+## [0.3.1] - 2026-06-06
+
+### Fixed
+
+- Guarded the CryptoTokenKit trampolines against panics crossing the FFI
+  boundary, validated the AID slice passed to smart-card token-driver
+  delegates, and removed the vestigial Swift bridge C header.
+
 ## [0.3.0] - 2026-05-20
 
 ### Added
