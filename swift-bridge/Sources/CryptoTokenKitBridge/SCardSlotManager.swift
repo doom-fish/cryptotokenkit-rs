@@ -81,16 +81,16 @@ public func ctk_slot_manager_get_slot_with_name(
     }
 
     let manager: TKSmartCardSlotManager = ctkBorrow(managerPtr)
-    let semaphore = DispatchSemaphore(value: 0)
+    let pending = CTKPendingReply<TKSmartCardSlot?>()
     manager.getSlot(withName: String(cString: name)) { slot in
-        if let slot {
-            outSlot.pointee = ctkRetain(slot)
-        }
-        semaphore.signal()
+        _ = pending.complete(slot)
     }
-    if semaphore.wait(timeout: .now() + .seconds(30)) == .timedOut {
+    guard let slot = pending.wait(seconds: 30) else {
         ctkWriteError(errorOut, "timed out waiting for smart-card slot lookup")
         return CTK_TIMED_OUT
+    }
+    if let slot {
+        outSlot.pointee = ctkRetain(slot)
     }
     return CTK_OK
 }

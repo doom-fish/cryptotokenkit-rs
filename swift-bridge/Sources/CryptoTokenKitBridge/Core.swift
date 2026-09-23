@@ -18,6 +18,32 @@ public func ctkBorrow<T: AnyObject>(_ ptr: UnsafeMutableRawPointer, as _: T.Type
     Unmanaged<T>.fromOpaque(ptr).takeUnretainedValue()
 }
 
+final class CTKPendingReply<Value> {
+    private let lock = NSLock()
+    private let semaphore = DispatchSemaphore(value: 0)
+    private var value: Value?
+    private var abandoned = false
+
+    func complete(_ newValue: Value) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !abandoned else { return false }
+        value = newValue
+        semaphore.signal()
+        return true
+    }
+
+    func wait(seconds: Double) -> Value? {
+        _ = semaphore.wait(timeout: .now() + seconds)
+        lock.lock()
+        defer { lock.unlock() }
+        if value == nil {
+            abandoned = true
+        }
+        return value
+    }
+}
+
 @_cdecl("ctk_object_release")
 public func ctk_object_release(_ ptr: UnsafeMutableRawPointer?) {
     guard let ptr else { return }

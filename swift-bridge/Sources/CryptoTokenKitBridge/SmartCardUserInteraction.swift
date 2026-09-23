@@ -322,6 +322,10 @@ private final class CTKMockSmartCard: TKSmartCard {
         sessionDepth = max(0, sessionDepth - 1)
     }
 
+    var currentSessionDepth: Int {
+        sessionDepth
+    }
+
     override func userInteractionForSecurePINVerification(
         _ pinFormat: TKSmartCardPINFormat,
         apdu: Data,
@@ -391,6 +395,14 @@ public func ctk_smart_card_slot(_ cardPtr: UnsafeMutableRawPointer?) -> UnsafeMu
     guard let cardPtr else { return nil }
     let card: TKSmartCard = ctkBorrow(cardPtr)
     return ctkRetain(card.slot)
+}
+
+@_cdecl("ctk_mock_smart_card_session_depth")
+public func ctk_mock_smart_card_session_depth(_ cardPtr: UnsafeMutableRawPointer?) -> Int {
+    guard let cardPtr, let card = ctkBorrow(cardPtr, as: TKSmartCard.self) as? CTKMockSmartCard else {
+        return -1
+    }
+    return card.currentSessionDepth
 }
 
 @_cdecl("ctk_mock_smart_card_new")
@@ -498,24 +510,22 @@ public func ctk_smart_card_user_interaction_run(
         return CTK_INVALID_ARGUMENT
     }
     let interaction: TKSmartCardUserInteraction = ctkBorrow(interactionPtr)
-    let semaphore = DispatchSemaphore(value: 0)
-    var status = CTK_OK
-    var callbackError: Error?
+    let configured = interaction.initialTimeout + interaction.interactionTimeout
+    let limit = configured.isFinite && configured > 25 ? min(configured, 3600) + 5 : 30
+    let pending = CTKPendingReply<(Bool, Error?)>()
     interaction.run { success, error in
-        if !success {
-            status = error.map(ctkStatus(from:)) ?? CTK_FRAMEWORK_ERROR
-            callbackError = error
-        }
-        semaphore.signal()
+        _ = pending.complete((success, error))
     }
-    if semaphore.wait(timeout: .now() + .seconds(30)) == .timedOut {
+    guard let (success, error) = pending.wait(seconds: limit) else {
+        _ = interaction.cancel()
         ctkWriteError(errorOut, "timed out waiting for smart-card user interaction")
         return CTK_TIMED_OUT
     }
-    if status != CTK_OK {
-        ctkWriteNSError(errorOut, fallback: "smart-card user interaction failed", error: callbackError)
+    guard success else {
+        ctkWriteNSError(errorOut, fallback: "smart-card user interaction failed", error: error)
+        return error.map(ctkStatus(from:)) ?? CTK_FRAMEWORK_ERROR
     }
-    return status
+    return CTK_OK
 }
 
 @_cdecl("ctk_smart_card_user_interaction_cancel")

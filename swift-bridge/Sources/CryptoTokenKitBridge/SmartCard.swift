@@ -156,24 +156,21 @@ public func ctk_smart_card_begin_session(
     }
 
     let card: TKSmartCard = ctkBorrow(cardPtr)
-    let semaphore = DispatchSemaphore(value: 0)
-    var status = CTK_OK
-    var callbackError: Error?
+    let pending = CTKPendingReply<(Bool, Error?)>()
     card.beginSession { success, error in
-        if !success {
-            status = error.map(ctkStatus(from:)) ?? CTK_FRAMEWORK_ERROR
-            callbackError = error
+        if !pending.complete((success, error)), success {
+            card.endSession()
         }
-        semaphore.signal()
     }
-    if semaphore.wait(timeout: .now() + .seconds(30)) == .timedOut {
+    guard let (success, error) = pending.wait(seconds: 30) else {
         ctkWriteError(errorOut, "timed out waiting for smart-card session")
         return CTK_TIMED_OUT
     }
-    if status != CTK_OK {
-        ctkWriteNSError(errorOut, fallback: "failed to begin smart-card session", error: callbackError)
+    guard success else {
+        ctkWriteNSError(errorOut, fallback: "failed to begin smart-card session", error: error)
+        return error.map(ctkStatus(from:)) ?? CTK_FRAMEWORK_ERROR
     }
-    return status
+    return CTK_OK
 }
 
 @_cdecl("ctk_smart_card_transmit_request_json")
@@ -196,15 +193,11 @@ public func ctk_smart_card_transmit_request_json(
 
     let card: TKSmartCard = ctkBorrow(cardPtr)
     let request = Data(bytes: requestPtr, count: requestLen)
-    let semaphore = DispatchSemaphore(value: 0)
-    var replyData: Data?
-    var replyError: Error?
+    let pending = CTKPendingReply<(Data?, Error?)>()
     card.transmit(request) { response, error in
-        replyData = response
-        replyError = error
-        semaphore.signal()
+        _ = pending.complete((response, error))
     }
-    if semaphore.wait(timeout: .now() + .seconds(30)) == .timedOut {
+    guard let (replyData, replyError) = pending.wait(seconds: 30) else {
         ctkWriteError(errorOut, "timed out waiting for smart-card transmit")
         return CTK_TIMED_OUT
     }
@@ -239,6 +232,11 @@ public func ctk_smart_card_send_ins(
     outReplyJSON.pointee = nil
     guard let cardPtr else {
         ctkWriteError(errorOut, "missing smart-card handle")
+        return CTK_INVALID_ARGUMENT
+    }
+
+    guard !hasLE || (0...65536).contains(le) else {
+        ctkWriteError(errorOut, "le must be between 0 and 65536")
         return CTK_INVALID_ARGUMENT
     }
 

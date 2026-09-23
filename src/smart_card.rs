@@ -318,6 +318,11 @@ impl SmartCard {
         data: Option<&[u8]>,
         le: Option<usize>,
     ) -> Result<ApduResponse, CryptoTokenKitError> {
+        if le.is_some_and(|le| le > MAX_EXPECTED_RESPONSE_LENGTH) {
+            return Err(CryptoTokenKitError::InvalidArgument(format!(
+                "le must be between 0 and {MAX_EXPECTED_RESPONSE_LENGTH}"
+            )));
+        }
         let (data_ptr, data_len) =
             data.map_or((ptr::null(), 0), |bytes| (bytes.as_ptr(), bytes.len()));
         let mut reply_ptr = ptr::null_mut();
@@ -351,9 +356,18 @@ impl SmartCard {
         callback: impl FnOnce(&Self) -> Result<T, CryptoTokenKitError>,
     ) -> Result<T, CryptoTokenKitError> {
         self.begin_session()?;
-        let result = callback(self);
-        self.end_session();
-        result
+        let _session = SessionGuard(self);
+        callback(self)
+    }
+}
+
+const MAX_EXPECTED_RESPONSE_LENGTH: usize = 65_536;
+
+struct SessionGuard<'a>(&'a SmartCard);
+
+impl Drop for SessionGuard<'_> {
+    fn drop(&mut self) {
+        self.0.end_session();
     }
 }
 
@@ -363,5 +377,62 @@ impl Drop for SmartCard {
             unsafe { ffi::ctk_object_release(self.raw) };
             self.raw = ptr::null_mut();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::panic::{catch_unwind, AssertUnwindSafe};
+
+    use super::SmartCard;
+    use crate::error::CryptoTokenKitError;
+
+    unsafe extern "C" {
+        fn ctk_mock_smart_card_session_depth(card: *mut core::ffi::c_void) -> isize;
+    }
+
+    fn session_depth(card: &SmartCard) -> isize {
+        unsafe { ctk_mock_smart_card_session_depth(card.raw()) }
+    }
+
+    #[test]
+    fn with_session_ends_the_session_when_the_callback_panics() {
+        let card = SmartCard::mock("Panic Reader").expect("mock card");
+        let outcome = catch_unwind(AssertUnwindSafe(|| {
+            card.with_session(|card| -> Result<(), CryptoTokenKitError> {
+                assert_eq!(session_depth(card), 1);
+                panic!("callback panic");
+            })
+        }));
+        assert!(outcome.is_err());
+        assert_eq!(session_depth(&card), 0);
+    }
+
+    #[test]
+    fn with_session_ends_the_session_after_success_and_error() {
+        let card = SmartCard::mock("Session Reader").expect("mock card");
+        assert_eq!(card.with_session(|card| Ok(session_depth(card))), Ok(1));
+        assert_eq!(session_depth(&card), 0);
+
+        let error = card
+            .with_session(|_| Err::<(), _>(CryptoTokenKitError::InvalidArgument("x".into())))
+            .expect_err("callback error propagates");
+        assert_eq!(error, CryptoTokenKitError::InvalidArgument("x".into()));
+        assert_eq!(session_depth(&card), 0);
+    }
+
+    #[test]
+    fn send_ins_rejects_expected_lengths_above_65536() {
+        let card = SmartCard::mock("Le Reader").expect("mock card");
+        for le in [65_537, usize::MAX, isize::MAX as usize + 1] {
+            let error = card
+                .send_ins(0x84, 0x00, 0x00, None, Some(le))
+                .expect_err("le out of range");
+            assert!(
+                matches!(error, CryptoTokenKitError::InvalidArgument(_)),
+                "{le}: {error:?}"
+            );
+        }
+        assert_eq!(session_depth(&card), 0);
     }
 }
