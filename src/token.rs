@@ -44,7 +44,7 @@ impl Token {
         let instance_id = to_cstring(instance_id)?;
         let mut error_ptr = ptr::null_mut();
         let raw = unsafe {
-            ffi::token::ctk_token_new(driver.raw(), instance_id.as_ptr(), &mut error_ptr)
+            ffi::token::ctk_token_new(driver.raw(), instance_id.as_ptr(), &raw mut error_ptr)
         };
         if raw.is_null() {
             return Err(crate::error::from_swift(
@@ -74,7 +74,7 @@ impl Token {
     /// Returns the corresponding `TKToken` value.
     pub fn configuration(&self) -> Result<TokenConfigurationSnapshot, CryptoTokenKitError> {
         let mut error_ptr = ptr::null_mut();
-        let ptr = unsafe { ffi::token::ctk_token_configuration_json(self.raw, &mut error_ptr) };
+        let ptr = unsafe { ffi::token::ctk_token_configuration_json(self.raw, &raw mut error_ptr) };
         if ptr.is_null() && !error_ptr.is_null() {
             return Err(crate::error::from_swift(
                 ffi::status::FRAMEWORK_ERROR,
@@ -106,7 +106,7 @@ impl Token {
                 data_ptr,
                 data_len,
                 has_data,
-                &mut error_ptr,
+                &raw mut error_ptr,
             )
         };
         status_result(status, error_ptr)
@@ -123,7 +123,7 @@ impl Token {
             ffi::token::ctk_token_set_keychain_items_json(
                 self.raw,
                 payload.as_ptr(),
-                &mut error_ptr,
+                &raw mut error_ptr,
             )
         };
         status_result(status, error_ptr)
@@ -140,7 +140,7 @@ impl Token {
             ffi::token::ctk_token_key_for_object_id_json(
                 self.raw,
                 object_id.as_ptr(),
-                &mut error_ptr,
+                &raw mut error_ptr,
             )
         };
         if ptr.is_null() {
@@ -163,7 +163,7 @@ impl Token {
             ffi::token::ctk_token_certificate_for_object_id_json(
                 self.raw,
                 object_id.as_ptr(),
-                &mut error_ptr,
+                &raw mut error_ptr,
             )
         };
         if ptr.is_null() {
@@ -180,8 +180,9 @@ impl Token {
         &self,
     ) -> Result<Option<Vec<TokenKeychainEntry>>, CryptoTokenKitError> {
         let mut error_ptr = ptr::null_mut();
-        let ptr =
-            unsafe { ffi::token::ctk_token_keychain_contents_items_json(self.raw, &mut error_ptr) };
+        let ptr = unsafe {
+            ffi::token::ctk_token_keychain_contents_items_json(self.raw, &raw mut error_ptr)
+        };
         if ptr.is_null() && !error_ptr.is_null() {
             return Err(crate::error::from_swift(
                 ffi::status::FRAMEWORK_ERROR,
@@ -213,7 +214,7 @@ impl SmartCardToken {
                 has_aid,
                 instance_id.as_ptr(),
                 driver.raw(),
-                &mut error_ptr,
+                &raw mut error_ptr,
             )
         };
         if raw.is_null() {
@@ -250,7 +251,7 @@ impl SmartCardToken {
     /// Returns the corresponding `TKSmartCardToken` value.
     pub fn configuration(&self) -> Result<TokenConfigurationSnapshot, CryptoTokenKitError> {
         let mut error_ptr = ptr::null_mut();
-        let ptr = unsafe { ffi::token::ctk_token_configuration_json(self.raw, &mut error_ptr) };
+        let ptr = unsafe { ffi::token::ctk_token_configuration_json(self.raw, &raw mut error_ptr) };
         if ptr.is_null() && !error_ptr.is_null() {
             return Err(crate::error::from_swift(
                 ffi::status::FRAMEWORK_ERROR,

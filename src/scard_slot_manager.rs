@@ -139,7 +139,7 @@ impl SmartCardSlotManager {
     pub fn slot_names(&self) -> Result<Vec<String>, CryptoTokenKitError> {
         let mut error_ptr = ptr::null_mut();
         let json = unsafe {
-            ffi::scard_slot_manager::ctk_slot_manager_slot_names_json(self.raw, &mut error_ptr)
+            ffi::scard_slot_manager::ctk_slot_manager_slot_names_json(self.raw, &raw mut error_ptr)
         };
         if json.is_null() && !error_ptr.is_null() {
             return Err(from_swift(ffi::status::FRAMEWORK_ERROR, error_ptr));
@@ -176,15 +176,15 @@ impl SmartCardSlotManager {
                 ffi::scard_slot_manager::ctk_slot_manager_get_slot_with_name(
                     self.raw,
                     name.as_ptr(),
-                    &mut raw,
-                    &mut error_ptr,
+                    &raw mut raw,
+                    &raw mut error_ptr,
                 )
             } else {
                 ffi::scard_slot_manager::ctk_slot_manager_slot_named(
                     self.raw,
                     name.as_ptr(),
-                    &mut raw,
-                    &mut error_ptr,
+                    &raw mut raw,
+                    &raw mut error_ptr,
                 )
             }
         };
@@ -254,8 +254,8 @@ impl SmartCardSlot {
                 self.raw,
                 Some(slot_state_trampoline),
                 user_info,
-                &mut raw,
-                &mut error_ptr,
+                &raw mut raw,
+                &raw mut error_ptr,
             )
         };
         status_result(status, error_ptr)?;

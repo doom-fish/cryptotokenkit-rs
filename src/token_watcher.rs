@@ -71,7 +71,7 @@ impl TokenWatcher {
     pub fn token_ids(&self) -> Result<Vec<String>, CryptoTokenKitError> {
         let mut error_ptr = ptr::null_mut();
         let ptr = unsafe {
-            ffi::token_watcher::ctk_token_watcher_token_ids_json(self.raw, &mut error_ptr)
+            ffi::token_watcher::ctk_token_watcher_token_ids_json(self.raw, &raw mut error_ptr)
         };
         if ptr.is_null() && !error_ptr.is_null() {
             return Err(from_swift(ffi::status::FRAMEWORK_ERROR, error_ptr));
@@ -99,7 +99,7 @@ impl TokenWatcher {
                 self.raw,
                 Some(token_watcher_trampoline),
                 user_info,
-                &mut error_ptr,
+                &raw mut error_ptr,
             )
         };
         status_result(status, error_ptr)?;
@@ -127,7 +127,7 @@ impl TokenWatcher {
                 token_id.as_ptr(),
                 Some(token_watcher_trampoline),
                 user_info,
-                &mut error_ptr,
+                &raw mut error_ptr,
             )
         };
         status_result(status, error_ptr)?;
@@ -146,7 +146,7 @@ impl TokenWatcher {
             ffi::token_watcher::ctk_token_watcher_token_info_json(
                 self.raw,
                 token_id.as_ptr(),
-                &mut error_ptr,
+                &raw mut error_ptr,
             )
         };
         if ptr.is_null() && !error_ptr.is_null() {

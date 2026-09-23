@@ -256,7 +256,7 @@ impl SmartCard {
                     self.raw,
                     storage.as_ptr(),
                     true,
-                    &mut error_ptr,
+                    &raw mut error_ptr,
                 )
             };
             (status, Some(storage))
@@ -266,7 +266,7 @@ impl SmartCard {
                     self.raw,
                     ptr::null(),
                     false,
-                    &mut error_ptr,
+                    &raw mut error_ptr,
                 )
             };
             (status, None)
@@ -278,7 +278,7 @@ impl SmartCard {
     pub fn begin_session(&self) -> Result<(), CryptoTokenKitError> {
         let mut error_ptr = ptr::null_mut();
         let status =
-            unsafe { ffi::smart_card::ctk_smart_card_begin_session(self.raw, &mut error_ptr) };
+            unsafe { ffi::smart_card::ctk_smart_card_begin_session(self.raw, &raw mut error_ptr) };
         status_result(status, error_ptr)
     }
 
@@ -291,8 +291,8 @@ impl SmartCard {
                 self.raw,
                 request.as_ptr(),
                 request.len(),
-                &mut reply_ptr,
-                &mut error_ptr,
+                &raw mut reply_ptr,
+                &raw mut error_ptr,
             )
         };
         status_result(status, error_ptr)?;
@@ -332,8 +332,8 @@ impl SmartCard {
                 data_len,
                 le.is_some(),
                 le.unwrap_or_default(),
-                &mut reply_ptr,
-                &mut error_ptr,
+                &raw mut reply_ptr,
+                &raw mut error_ptr,
             )
         };
         status_result(status, error_ptr)?;

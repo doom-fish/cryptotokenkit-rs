@@ -116,7 +116,7 @@ impl SmartCardTokenSession {
         let raw = unsafe {
             ffi::token_session::ctk_smart_card_token_session_get_smart_card(
                 self.raw,
-                &mut error_ptr,
+                &raw mut error_ptr,
             )
         };
         if raw.is_null() && !error_ptr.is_null() {
@@ -156,7 +156,7 @@ impl TokenAuthOperation {
     pub fn finish(&self) -> Result<(), CryptoTokenKitError> {
         let mut error_ptr = ptr::null_mut();
         let status = unsafe {
-            ffi::token_session::ctk_token_auth_operation_finish(self.raw, &mut error_ptr)
+            ffi::token_session::ctk_token_auth_operation_finish(self.raw, &raw mut error_ptr)
         };
         status_result(status, error_ptr)
     }
@@ -211,7 +211,7 @@ impl TokenPasswordAuthOperation {
                     self.raw,
                     storage.as_ptr(),
                     true,
-                    &mut error_ptr,
+                    &raw mut error_ptr,
                 )
             };
             (status, Some(storage))
@@ -221,7 +221,7 @@ impl TokenPasswordAuthOperation {
                     self.raw,
                     ptr::null(),
                     false,
-                    &mut error_ptr,
+                    &raw mut error_ptr,
                 )
             };
             (status, None)
@@ -233,7 +233,7 @@ impl TokenPasswordAuthOperation {
     pub fn finish(&self) -> Result<(), CryptoTokenKitError> {
         let mut error_ptr = ptr::null_mut();
         let status = unsafe {
-            ffi::token_session::ctk_token_auth_operation_finish(self.raw, &mut error_ptr)
+            ffi::token_session::ctk_token_auth_operation_finish(self.raw, &raw mut error_ptr)
         };
         status_result(status, error_ptr)
     }
@@ -289,7 +289,7 @@ impl TokenSmartCardPinAuthOperation {
             ffi::token_session::ctk_token_smart_card_pin_auth_operation_update_json(
                 self.raw,
                 payload.as_ptr(),
-                &mut error_ptr,
+                &raw mut error_ptr,
             )
         };
         status_result(status, error_ptr)
@@ -353,7 +353,7 @@ impl TokenSmartCardPinAuthOperation {
             ffi::token_session::ctk_token_smart_card_pin_auth_operation_set_smart_card(
                 self.raw,
                 raw,
-                &mut error_ptr,
+                &raw mut error_ptr,
             )
         };
         status_result(status, error_ptr)
@@ -375,7 +375,7 @@ impl TokenSmartCardPinAuthOperation {
     pub fn finish(&self) -> Result<(), CryptoTokenKitError> {
         let mut error_ptr = ptr::null_mut();
         let status = unsafe {
-            ffi::token_session::ctk_token_auth_operation_finish(self.raw, &mut error_ptr)
+            ffi::token_session::ctk_token_auth_operation_finish(self.raw, &raw mut error_ptr)
         };
         status_result(status, error_ptr)
     }

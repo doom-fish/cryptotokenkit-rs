@@ -122,8 +122,8 @@ impl SmartCardUserInteraction {
                 self.raw,
                 Some(smart_card_user_interaction_trampoline),
                 user_info,
-                &mut raw,
-                &mut error_ptr,
+                &raw mut raw,
+                &raw mut error_ptr,
             )
         };
         status_result(status, error_ptr)?;
@@ -202,7 +202,7 @@ impl SmartCardUserInteraction {
         let status = unsafe {
             ffi::smart_card_interaction::ctk_smart_card_user_interaction_run(
                 self.raw,
-                &mut error_ptr,
+                &raw mut error_ptr,
             )
         };
         status_result(status, error_ptr)
@@ -278,7 +278,7 @@ impl SmartCardUserInteractionForPinOperation {
                     self.inner.raw(),
                     payload.as_ptr(),
                     true,
-                    &mut error_ptr,
+                    &raw mut error_ptr,
                 )
             }
         } else {
@@ -287,7 +287,7 @@ impl SmartCardUserInteractionForPinOperation {
                     self.inner.raw(),
                     ptr::null(),
                     false,
-                    &mut error_ptr,
+                    &raw mut error_ptr,
                 )
             }
         };
@@ -322,7 +322,7 @@ impl SmartCardUserInteractionForPinOperation {
                     self.inner.raw(),
                     identifier.as_ptr(),
                     true,
-                    &mut error_ptr,
+                    &raw mut error_ptr,
                 )
             }
         } else {
@@ -331,7 +331,7 @@ impl SmartCardUserInteractionForPinOperation {
                     self.inner.raw(),
                     ptr::null(),
                     false,
-                    &mut error_ptr,
+                    &raw mut error_ptr,
                 )
             }
         };
@@ -530,7 +530,7 @@ impl SmartCard {
                 apdu.as_ptr(),
                 apdu.len(),
                 pin_byte_offset,
-                &mut error_ptr,
+                &raw mut error_ptr,
             )
         };
         if raw.is_null() && !error_ptr.is_null() {
@@ -561,7 +561,7 @@ impl SmartCard {
                 apdu.len(),
                 current_pin_byte_offset,
                 new_pin_byte_offset,
-                &mut error_ptr,
+                &raw mut error_ptr,
             )
         };
         if raw.is_null() && !error_ptr.is_null() {

@@ -888,8 +888,8 @@ impl TokenSession {
                 Some(token_session_decrypt_trampoline),
                 Some(token_session_key_exchange_trampoline),
                 user_info,
-                &mut raw,
-                &mut error_ptr,
+                &raw mut raw,
+                &raw mut error_ptr,
             )
         };
         status_result(status, error_ptr)?;
@@ -926,8 +926,8 @@ impl TokenSession {
                 self.raw(),
                 operation.raw(),
                 constraint.as_ptr(),
-                &mut raw,
-                &mut error_ptr,
+                &raw mut raw,
+                &raw mut error_ptr,
             )
         };
         status_result(status, error_ptr)?;
@@ -989,8 +989,8 @@ impl TokenSession {
                 object_id.as_ptr(),
                 base_algorithm.as_ptr(),
                 supported_algorithms.as_ptr(),
-                &mut reply_ptr,
-                &mut error_ptr,
+                &raw mut reply_ptr,
+                &raw mut error_ptr,
             )
         };
         status_result(status, error_ptr)?;
@@ -1067,8 +1067,8 @@ impl TokenSession {
                 shared_info_ptr,
                 shared_info_len,
                 has_shared_info,
-                &mut reply_ptr,
-                &mut error_ptr,
+                &raw mut reply_ptr,
+                &raw mut error_ptr,
             )
         };
         status_result(status, error_ptr)?;
@@ -1110,8 +1110,8 @@ impl Token {
                 Some(token_create_session_trampoline),
                 Some(token_terminate_session_trampoline),
                 user_info,
-                &mut raw,
-                &mut error_ptr,
+                &raw mut raw,
+                &raw mut error_ptr,
             )
         };
         status_result(status, error_ptr)?;
@@ -1143,8 +1143,8 @@ impl Token {
         let status = unsafe {
             ffi::token_delegate::ctk_token_invoke_delegate_create_session(
                 self.raw(),
-                &mut raw,
-                &mut error_ptr,
+                &raw mut raw,
+                &raw mut error_ptr,
             )
         };
         status_result(status, error_ptr)?;
@@ -1175,7 +1175,7 @@ impl TokenDriver {
             ffi::token_delegate::ctk_token_driver_add_token_configuration_json(
                 class_id.as_ptr(),
                 instance_id.as_ptr(),
-                &mut error_ptr,
+                &raw mut error_ptr,
             )
         };
         if ptr.is_null() {
@@ -1199,7 +1199,7 @@ impl TokenDriver {
             ffi::token_delegate::ctk_token_driver_remove_token_configuration(
                 class_id.as_ptr(),
                 instance_id.as_ptr(),
-                &mut error_ptr,
+                &raw mut error_ptr,
             )
         };
         status_result(status, error_ptr)
@@ -1227,8 +1227,8 @@ impl TokenDriver {
                 Some(token_driver_create_token_trampoline),
                 Some(token_driver_terminate_token_trampoline),
                 user_info,
-                &mut raw,
-                &mut error_ptr,
+                &raw mut raw,
+                &raw mut error_ptr,
             )
         };
         status_result(status, error_ptr)?;
@@ -1263,8 +1263,8 @@ impl TokenDriver {
             ffi::token_delegate::ctk_token_driver_invoke_delegate_token_for_configuration_json(
                 self.raw(),
                 configuration.as_ptr(),
-                &mut raw,
-                &mut error_ptr,
+                &raw mut raw,
+                &raw mut error_ptr,
             )
         };
         status_result(status, error_ptr)?;
@@ -1305,8 +1305,8 @@ impl SmartCardTokenDriver {
                 Some(smart_card_token_driver_create_token_trampoline),
                 Some(smart_card_token_driver_terminate_token_trampoline),
                 user_info,
-                &mut raw,
-                &mut error_ptr,
+                &raw mut raw,
+                &raw mut error_ptr,
             )
         };
         status_result(status, error_ptr)?;
@@ -1347,8 +1347,8 @@ impl SmartCardTokenDriver {
                 aid_ptr,
                 aid_len,
                 has_aid,
-                &mut raw,
-                &mut error_ptr,
+                &raw mut raw,
+                &raw mut error_ptr,
             )
         };
         status_result(status, error_ptr)?;
