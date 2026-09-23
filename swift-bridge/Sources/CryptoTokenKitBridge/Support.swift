@@ -21,9 +21,22 @@ func ctkTakeJSONValue(_ ptr: UnsafeMutablePointer<CChar>?) -> Any? {
 func ctkNSError(status: Int32, message: String) -> NSError {
     NSError(
         domain: TKErrorDomain,
-        code: Int(status),
+        code: ctkTKErrorCode(forStatus: status),
         userInfo: [NSLocalizedDescriptionKey: message]
     )
+}
+
+func ctkTKErrorCode(forStatus status: Int32) -> Int {
+    switch status {
+    case CTK_INVALID_ARGUMENT:
+        return TKError.Code.badParameter.rawValue
+    case CTK_UNSUPPORTED:
+        return TKError.Code.notImplemented.rawValue
+    case CTK_OK, CTK_FRAMEWORK_ERROR, CTK_TIMED_OUT:
+        return TKError.Code.communicationError.rawValue
+    default:
+        return Int(status)
+    }
 }
 
 func ctkWriteCallbackError(

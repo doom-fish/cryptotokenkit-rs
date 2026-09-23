@@ -3,9 +3,10 @@ import Foundation
 import Security
 
 public let CTK_OK: Int32 = 0
-public let CTK_INVALID_ARGUMENT: Int32 = -1
-public let CTK_FRAMEWORK_ERROR: Int32 = -2
-public let CTK_TIMED_OUT: Int32 = -3
+public let CTK_INVALID_ARGUMENT: Int32 = -1001
+public let CTK_FRAMEWORK_ERROR: Int32 = -1002
+public let CTK_TIMED_OUT: Int32 = -1003
+public let CTK_UNSUPPORTED: Int32 = -1004
 
 @inline(__always)
 public func ctkRetain(_ object: some AnyObject) -> UnsafeMutableRawPointer {
@@ -45,9 +46,15 @@ public func ctkWriteNSError(
     ctkWriteError(errorOut, (error as NSError?)?.localizedDescription ?? fallback)
 }
 
-@inline(__always)
 public func ctkStatus(from error: Error) -> Int32 {
-    Int32((error as NSError).code)
+    let error = error as NSError
+    guard error.domain == TKErrorDomain,
+          let code = Int32(exactly: error.code),
+          code != CTK_OK,
+          !(CTK_UNSUPPORTED...CTK_INVALID_ARGUMENT).contains(code) else {
+        return CTK_FRAMEWORK_ERROR
+    }
+    return code
 }
 
 func ctkJSONString(_ value: Any) -> String {

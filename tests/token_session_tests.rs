@@ -1,6 +1,6 @@
 use cryptotokenkit::{
-    SmartCardPinFormat, Token, TokenAuthOperation, TokenDriver, TokenPasswordAuthOperation,
-    TokenSession, TokenSmartCardPinAuthOperation,
+    CryptoTokenKitError, SmartCardPinFormat, Token, TokenAuthOperation, TokenDriver,
+    TokenPasswordAuthOperation, TokenSession, TokenSmartCardPinAuthOperation,
 };
 
 #[test]
@@ -28,6 +28,13 @@ fn token_session_and_auth_operations_work() -> Result<(), Box<dyn std::error::Er
     pin.set_pin_byte_offset(0)?;
     pin.set_pin(Some("1234"))?;
     assert_eq!(pin.pin()?.as_deref(), Some("1234"));
-    pin.finish()?;
+    assert!(!pin.has_smart_card()?);
+    let error = pin
+        .finish()
+        .expect_err("a PIN operation without a smart card cannot finish");
+    assert!(
+        matches!(error, CryptoTokenKitError::FrameworkError(_)),
+        "{error:?}"
+    );
     Ok(())
 }

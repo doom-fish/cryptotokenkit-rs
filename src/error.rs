@@ -10,6 +10,7 @@ pub const TK_ERROR_DOMAIN: &str = "CryptoTokenKit";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(i32)]
+#[non_exhaustive]
 /// Mirrors the `TKError.Code` values reported by `CryptoTokenKit` APIs.
 pub enum TKErrorCode {
     /// Variant bridged from `TKError.Code`.
@@ -30,6 +31,8 @@ pub enum TKErrorCode {
     BadParameter = -8,
     /// Variant bridged from `TKError.Code`.
     AuthenticationNeeded = -9,
+    #[allow(missing_docs)]
+    InvalidatedDeviceKey = -10,
 }
 
 impl TKErrorCode {
@@ -46,6 +49,7 @@ impl TKErrorCode {
             -7 => Some(Self::TokenNotFound),
             -8 => Some(Self::BadParameter),
             -9 => Some(Self::AuthenticationNeeded),
+            -10 => Some(Self::InvalidatedDeviceKey),
             _ => None,
         }
     }
@@ -69,6 +73,8 @@ pub enum CryptoTokenKitError {
     FrameworkError(String),
     /// Variant bridged from `CryptoTokenKit NSError`.
     TimedOut(String),
+    #[allow(missing_docs)]
+    Unsupported(String),
     /// Variant bridged from `CryptoTokenKit NSError`.
     Unknown {
         /// Raw status code bridged from the framework error payload.
@@ -86,6 +92,7 @@ impl CryptoTokenKitError {
             Self::InvalidArgument(_) => ffi::status::INVALID_ARGUMENT,
             Self::FrameworkError(_) => ffi::status::FRAMEWORK_ERROR,
             Self::TimedOut(_) => ffi::status::TIMED_OUT,
+            Self::Unsupported(_) => ffi::status::UNSUPPORTED,
             Self::Unknown { code, .. } => *code,
         }
     }
@@ -97,6 +104,7 @@ impl CryptoTokenKitError {
             Self::InvalidArgument(message)
             | Self::FrameworkError(message)
             | Self::TimedOut(message)
+            | Self::Unsupported(message)
             | Self::Unknown { message, .. } => message,
         }
     }
@@ -139,6 +147,14 @@ pub(crate) fn from_status_message(status: i32, message: String) -> CryptoTokenKi
         ffi::status::INVALID_ARGUMENT => CryptoTokenKitError::InvalidArgument(message),
         ffi::status::FRAMEWORK_ERROR => CryptoTokenKitError::FrameworkError(message),
         ffi::status::TIMED_OUT => CryptoTokenKitError::TimedOut(message),
+        ffi::status::UNSUPPORTED => CryptoTokenKitError::Unsupported(message),
         code => CryptoTokenKitError::Unknown { code, message },
+    }
+}
+
+pub(crate) const fn failure_status(error: &CryptoTokenKitError) -> i32 {
+    match error.code() {
+        ffi::status::OK => ffi::status::FRAMEWORK_ERROR,
+        code => code,
     }
 }

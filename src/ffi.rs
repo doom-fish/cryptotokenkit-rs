@@ -4,9 +4,10 @@ use core::ffi::c_void;
 
 pub mod status {
     pub const OK: i32 = 0;
-    pub const INVALID_ARGUMENT: i32 = -1;
-    pub const FRAMEWORK_ERROR: i32 = -2;
-    pub const TIMED_OUT: i32 = -3;
+    pub const INVALID_ARGUMENT: i32 = -1001;
+    pub const FRAMEWORK_ERROR: i32 = -1002;
+    pub const TIMED_OUT: i32 = -1003;
+    pub const UNSUPPORTED: i32 = -1004;
 }
 
 pub mod scard_slot_manager;

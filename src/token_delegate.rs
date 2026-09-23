@@ -6,7 +6,7 @@ use std::sync::Mutex;
 
 use serde_json::Value;
 
-use crate::error::{CryptoTokenKitError, TKErrorCode};
+use crate::error::{failure_status, CryptoTokenKitError, TKErrorCode};
 use crate::ffi;
 use crate::private::{
     decode_json, decode_optional_json, encode_json_cstring, json_to_ptr, status_result, to_cstring,
@@ -398,7 +398,7 @@ unsafe extern "C" fn token_session_begin_auth_trampoline(
         Ok(Ok(status)) => status,
         Ok(Err(error)) => {
             write_error_ptr(error_out, error.message());
-            error.code()
+            failure_status(&error)
         }
         Err(_) => {
             write_error_ptr(
@@ -503,7 +503,7 @@ unsafe extern "C" fn token_session_data_trampoline(
         Ok(Ok(status)) => status,
         Ok(Err(error)) => {
             write_error_ptr(error_out, error.message());
-            error.code()
+            failure_status(&error)
         }
         Err(_) => {
             write_error_ptr(error_out, "panic in token-session data delegate callback");
@@ -619,7 +619,7 @@ unsafe extern "C" fn token_session_key_exchange_trampoline(
         Ok(Ok(status)) => status,
         Ok(Err(error)) => {
             write_error_ptr(error_out, error.message());
-            error.code()
+            failure_status(&error)
         }
         Err(_) => {
             write_error_ptr(
@@ -661,7 +661,7 @@ unsafe extern "C" fn token_create_session_trampoline(
         Ok(Ok(status)) => status,
         Ok(Err(error)) => {
             write_error_ptr(error_out, error.message());
-            error.code()
+            failure_status(&error)
         }
         Err(_) => {
             write_error_ptr(error_out, "panic in token create-session delegate callback");
@@ -734,7 +734,7 @@ unsafe extern "C" fn token_driver_create_token_trampoline(
         Ok(Ok(status)) => status,
         Ok(Err(error)) => {
             write_error_ptr(error_out, error.message());
-            error.code()
+            failure_status(&error)
         }
         Err(_) => {
             write_error_ptr(
@@ -818,7 +818,7 @@ unsafe extern "C" fn smart_card_token_driver_create_token_trampoline(
         Ok(Ok(status)) => status,
         Ok(Err(error)) => {
             write_error_ptr(error_out, error.message());
-            error.code()
+            failure_status(&error)
         }
         Err(_) => {
             write_error_ptr(

@@ -599,7 +599,7 @@ public func ctk_token_session_invoke_delegate_begin_auth(
     )
     if let callbackError {
         ctkWriteNSError(errorOut, fallback: "token-session delegate begin-auth failed", error: callbackError)
-        return Int32(callbackError.code)
+        return ctkStatus(from: callbackError)
     }
     outOperation.pointee = raw
     return CTK_OK
@@ -670,7 +670,7 @@ private func ctkInvokeTokenSessionDataDelegate(
         return CTK_OK
     } catch {
         ctkWriteNSError(errorOut, fallback: "token-session delegate invocation failed", error: error)
-        return Int32((error as NSError).code)
+        return ctkStatus(from: error)
     }
 }
 
@@ -785,7 +785,7 @@ public func ctk_token_session_invoke_delegate_key_exchange(
         return CTK_OK
     } catch {
         ctkWriteNSError(errorOut, fallback: "token-session delegate key exchange failed", error: error)
-        return Int32((error as NSError).code)
+        return ctkStatus(from: error)
     }
 }
 
@@ -859,7 +859,7 @@ public func ctk_token_invoke_delegate_create_session(
     outSession.pointee = delegate.invokeCreateSession(token: token, errorOut: &callbackError)
     if let callbackError {
         ctkWriteNSError(errorOut, fallback: "token delegate create-session failed", error: callbackError)
-        return Int32(callbackError.code)
+        return ctkStatus(from: callbackError)
     }
     return CTK_OK
 }
@@ -946,7 +946,7 @@ public func ctk_token_driver_invoke_delegate_token_for_configuration_json(
     )
     if let callbackError {
         ctkWriteNSError(errorOut, fallback: "token-driver delegate token creation failed", error: callbackError)
-        return Int32(callbackError.code)
+        return ctkStatus(from: callbackError)
     }
     return CTK_OK
 }
@@ -1025,7 +1025,7 @@ public func ctk_smart_card_token_driver_invoke_delegate_create_token(
     )
     if let callbackError {
         ctkWriteNSError(errorOut, fallback: "smart-card token-driver delegate token creation failed", error: callbackError)
-        return Int32(callbackError.code)
+        return ctkStatus(from: callbackError)
     }
     return CTK_OK
 }
