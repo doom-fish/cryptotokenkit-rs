@@ -72,7 +72,7 @@ Enumerated all CryptoTokenKit framework public headers (14 .h files) from the ma
 | `TKTokenDriverConfiguration.classID` | property | `TKTokenConfiguration.h` | `TokenDriverConfigurationSnapshot::class_id`. |
 | `TKTokenDriverConfiguration.tokenConfigurations` | property | `TKTokenConfiguration.h` | `TokenDriverConfigurationSnapshot::token_configurations`. |
 | `TKTokenConfiguration.instanceID` | property | `TKTokenConfiguration.h` | `TokenConfigurationSnapshot::instance_id`. |
-| `TKTokenConfiguration.configurationData` | property | `TKTokenConfiguration.h` | `Token::set_configuration_data` / `Token::configuration` (bridge-managed on base `TKToken`). |
+| `TKTokenConfiguration.configurationData` | property | `TKTokenConfiguration.h` | `Token::set_configuration_data` / `Token::configuration` set and read the framework property; `set_configuration_data` returns `Unsupported` when CryptoTokenKit does not keep the value (outside the app that contains the token extension). |
 | `TKTokenConfiguration.keychainItems` | property | `TKTokenConfiguration.h` | `Token::set_keychain_items` / `Token::configuration`. |
 | `TKTokenConfiguration.keyForObjectID:error:` | method | `TKTokenConfiguration.h` | `Token::key_for_object_id`. |
 | `TKTokenConfiguration.certificateForObjectID:error:` | method | `TKTokenConfiguration.h` | `Token::certificate_for_object_id`. |
@@ -98,8 +98,8 @@ Enumerated all CryptoTokenKit framework public headers (14 .h files) from the ma
 | `TKSmartCardToken.AID` | property | `TKSmartCardToken.h` | `SmartCardToken::aid`. |
 | `TKSmartCardTokenDriver` | class | `TKSmartCardToken.h` | `SmartCardTokenDriver::new`. |
 | `TKErrorDomain` | constant | `TKError.h` | Re-exported as `TK_ERROR_DOMAIN`. |
-| `TKErrorCode` | enum | `TKError.h` | Re-exported as `TKErrorCode`; `CryptoTokenKitError::framework_code()` maps framework statuses back to SDK codes. |
-| `TKTLVRecord.recordFromData:` | method | `TKTLVRecord.h` | `TlvRecord::parse` provides a pure-Rust fallback for the framework parser that throws on macOS 26.2. |
+| `TKErrorCode` | enum | `TKError.h` | Re-exported as `TKErrorCode` (including `InvalidatedDeviceKey`, SDK 27.0); `CryptoTokenKitError::framework_code()` maps TKErrorDomain codes back to SDK codes and never reports bridge failures as SDK codes. |
+| `TKTLVRecord.recordFromData:` | method | `TKTLVRecord.h` | `TlvRecord::parse` is a pure-Rust parser (the base-class `TKTLVRecord` parsers raise `NSInternalInconsistencyException`); it returns `None` for malformed input. |
 | `TKTLVRecord.sequenceOfRecordsFromData:` | method | `TKTLVRecord.h` | `TlvRecord::parse_sequence` provides the equivalent pure-Rust fallback. |
 | `TKBERTLVRecord.dataForTag:` | method | `TKTLVRecord.h` | `TlvRecord::ber_tag_data`. |
 | `TKBERTLVRecord.initWithTag:records:` | method | `TKTLVRecord.h` | `TlvRecord::ber_constructed`. |
@@ -121,13 +121,13 @@ Enumerated all CryptoTokenKit framework public headers (14 .h files) from the ma
 | `TKTokenDelegate` | protocol | `TKToken.h` | `TokenDelegate`. |
 | `TKTokenDriver.delegate` | property | `TKToken.h` | `TokenDriver::set_delegate` / `clear_delegate` / invoke helpers. |
 | `TKTokenDriverDelegate` | protocol | `TKToken.h` | `TokenDriverDelegate`. |
-| `TKTokenDriverConfiguration.addTokenConfigurationForTokenInstanceID:` | method | `TKTokenConfiguration.h` | `TokenDriver::add_token_configuration` via a bridge-managed configuration store. |
-| `TKTokenDriverConfiguration.removeTokenConfigurationForTokenInstanceID:` | method | `TKTokenConfiguration.h` | `TokenDriver::remove_token_configuration` via a bridge-managed configuration store. |
+| `TKTokenDriverConfiguration.addTokenConfigurationForTokenInstanceID:` | method | `TKTokenConfiguration.h` | `TokenDriver::add_token_configuration`, on the framework's hosted driver configuration; returns `Unsupported` outside the app that contains the token extension. |
+| `TKTokenDriverConfiguration.removeTokenConfigurationForTokenInstanceID:` | method | `TKTokenConfiguration.h` | `TokenDriver::remove_token_configuration`, on the framework's hosted driver configuration; returns `Unsupported` outside the app that contains the token extension. |
 | `TKSmartCardTokenDriverDelegate` | protocol | `TKSmartCardToken.h` | `SmartCardTokenDriverDelegate`. |
 
 ## 🔴 GAPS
 
-None. All 113 non-exempt macOS-public symbols audited from the 26.2 SDK are now verified.
+None. All 113 non-exempt rows audited from the 26.2 SDK are verified. Rows group related selectors, so the percentage is over rows rather than individual symbols; token-driver configuration rows only take effect in the app that contains the token extension, and report `Unsupported` elsewhere.
 
 ## ⏭️ EXEMPT
 | Symbol | Kind | Header | Reason | SDK attribute |

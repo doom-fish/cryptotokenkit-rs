@@ -8,14 +8,14 @@ Legend:
 - 🟡 partial
 - ⏭️ skipped
 
-Current audit result: **113/113** non-exempt macOS-public symbols verified (**100.0%** coverage, with **7** exempt SDK rows). Equivalent safe-Rust helpers and bridge-managed stores count as implemented when they make the framework behavior reachable from Rust.
+Current audit result: **113/113** non-exempt rows verified (**100.0%**, with **7** exempt SDK rows). The count is over rows, not individual symbols: related selectors and properties share a row, and Rust-side equivalents (for example `SmartCard::with_session` for `inSessionWithError:executeBlock:`) count as implemented. Rows for token-driver configurations call the framework but only take effect in the app that contains the token extension. The SDK 27.0 headers only add `TKErrorCodeInvalidatedDeviceKey`, which is mapped.
 
 ## TKError.h
 
 | API | Status | Notes |
 | --- | --- | --- |
 | `TKErrorDomain` | ✅ implemented | Re-exported as `TK_ERROR_DOMAIN`. |
-| `TKErrorCode` | ✅ implemented | Re-exported as `TKErrorCode`, with `CryptoTokenKitError::framework_code()` for reverse mapping. |
+| `TKErrorCode` | ✅ implemented | Re-exported as `TKErrorCode` (including `InvalidatedDeviceKey`, SDK 27.0), with `CryptoTokenKitError::framework_code()` for reverse mapping. Bridge failures never alias SDK codes. |
 
 ## TKTLVRecord.h
 
@@ -23,7 +23,7 @@ Current audit result: **113/113** non-exempt macOS-public symbols verified (**10
 | --- | --- | --- |
 | `TKTLVTag` | ✅ implemented | Exposed through `TlvRecord::tag`. |
 | `TKTLVRecord.tag / value / data` | ✅ implemented | Available on `TlvRecord`. |
-| `TKTLVRecord.recordFromData:` | ✅ implemented | `TlvRecord::parse` provides a pure-Rust fallback for the framework parser that raises `NSInternalInconsistencyException` on macOS 26.2. |
+| `TKTLVRecord.recordFromData:` | ✅ implemented | `TlvRecord::parse` is a pure-Rust parser (the base-class `TKTLVRecord` parsers raise `NSInternalInconsistencyException`); it returns `None` for malformed input. |
 | `TKTLVRecord.sequenceOfRecordsFromData:` | ✅ implemented | `TlvRecord::parse_sequence` provides the equivalent pure-Rust fallback. |
 | `TKBERTLVRecord.dataForTag:` | ✅ implemented | `TlvRecord::ber_tag_data`. |
 | `TKBERTLVRecord.initWithTag:value:` | ✅ implemented | `TlvRecord::ber`. |
@@ -126,10 +126,10 @@ Current audit result: **113/113** non-exempt macOS-public symbols verified (**10
 | `TKTokenDriverConfiguration.driverConfigurations` | ✅ implemented | `TokenDriver::driver_configurations`. |
 | `TKTokenDriverConfiguration.classID` | ✅ implemented | `TokenDriverConfigurationSnapshot::class_id`. |
 | `TKTokenDriverConfiguration.tokenConfigurations` | ✅ implemented | `TokenDriverConfigurationSnapshot::token_configurations`. |
-| `TKTokenDriverConfiguration.addTokenConfigurationForTokenInstanceID:` | ✅ implemented | `TokenDriver::add_token_configuration` via a bridge-managed configuration store. |
-| `TKTokenDriverConfiguration.removeTokenConfigurationForTokenInstanceID:` | ✅ implemented | `TokenDriver::remove_token_configuration` via a bridge-managed configuration store. |
+| `TKTokenDriverConfiguration.addTokenConfigurationForTokenInstanceID:` | ✅ implemented | `TokenDriver::add_token_configuration`, on the framework's hosted driver configuration; returns `Unsupported` outside the app that contains the token extension. |
+| `TKTokenDriverConfiguration.removeTokenConfigurationForTokenInstanceID:` | ✅ implemented | `TokenDriver::remove_token_configuration`, on the framework's hosted driver configuration; returns `Unsupported` outside the app that contains the token extension. |
 | `TKTokenConfiguration.instanceID` | ✅ implemented | `TokenConfigurationSnapshot::instance_id`. |
-| `TKTokenConfiguration.configurationData` | ✅ implemented | `Token::set_configuration_data` / `Token::configuration` (bridge-managed on base `TKToken`). |
+| `TKTokenConfiguration.configurationData` | ✅ implemented | `Token::set_configuration_data` / `Token::configuration` set and read the framework property; `set_configuration_data` returns `Unsupported` when CryptoTokenKit does not keep the value (outside the app that contains the token extension). |
 | `TKTokenConfiguration.keychainItems` | ✅ implemented | `Token::set_keychain_items` / `Token::configuration`. |
 | `TKTokenConfiguration.keyForObjectID:error:` | ✅ implemented | `Token::key_for_object_id`. |
 | `TKTokenConfiguration.certificateForObjectID:error:` | ✅ implemented | `Token::certificate_for_object_id`. |
