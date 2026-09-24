@@ -43,7 +43,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## PINs and passwords
 
-`TokenPasswordAuthOperation::password` and `TokenSmartCardPinAuthOperation::pin` return `zeroize::Zeroizing<String>`, and the buffer the Swift bridge hands to Rust is wiped before it is freed. PINs and passwords never pass through the bridge's JSON snapshots. The copies `CryptoTokenKit` keeps (its own `NSString` properties) cannot be wiped from Rust.
+`TokenPasswordAuthOperation::password` and `TokenSmartCardPinAuthOperation::pin` return `zeroize::Zeroizing<String>`, and the buffer the Swift bridge hands to Rust is wiped before it is freed. PINs and passwords never pass through the bridge's JSON snapshots. Data a `TokenSessionDelegate` returns from `sign_data`, `decrypt_data` or `perform_key_exchange` reaches the framework through a byte buffer that is wiped afterwards, and `invoke_delegate_decrypt_data` and `invoke_delegate_perform_key_exchange` return `Zeroizing<Vec<u8>>`. The copies `CryptoTokenKit` keeps (its own `NSString` properties and the `Data` a delegate hands it) cannot be wiped from Rust.
 
 ## Callbacks and threads
 

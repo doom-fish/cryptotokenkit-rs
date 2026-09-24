@@ -5,12 +5,13 @@ use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use doom_fish_utils::callback_context::CallbackContext;
 use serde_json::Value;
+use zeroize::Zeroizing;
 
 use crate::error::{failure_status, CryptoTokenKitError, TKErrorCode};
 use crate::ffi;
 use crate::private::{
-    checked, decode_json, decode_optional_json, encode_json_cstring, json_to_ptr, status_result,
-    to_cstring, write_error_ptr,
+    checked, decode_json, decode_optional_json, encode_json_cstring, status_result,
+    take_secret_bytes, to_cstring, write_error_ptr, write_secret_reply,
 };
 use crate::smart_card::SmartCard;
 use crate::token::{SmartCardToken, Token, TokenConfigurationSnapshot};
@@ -475,7 +476,8 @@ unsafe extern "C" fn token_session_data_trampoline(
     data_len: usize,
     object_id_ptr: *const c_char,
     algorithm_raw: *mut c_void,
-    out_reply_json: *mut *mut c_char,
+    out_reply_bytes: *mut *mut u8,
+    out_reply_len: *mut usize,
     error_out: *mut *mut c_char,
     mode: i32,
 ) -> i32 {
@@ -505,17 +507,12 @@ unsafe extern "C" fn token_session_data_trampoline(
             object_id_ptr,
             "missing token object identifier",
         )?);
-        let reply = if mode == 0 {
+        let reply = Zeroizing::new(if mode == 0 {
             lock(delegate).sign_data(&session, data, &object_id, &algorithm)?
         } else {
             lock(delegate).decrypt_data(&session, data, &object_id, &algorithm)?
-        };
-        if !out_reply_json.is_null() {
-            unsafe {
-                *out_reply_json = json_to_ptr(&reply)?;
-            }
-        }
-        Ok(())
+        });
+        unsafe { write_secret_reply(&reply, out_reply_bytes, out_reply_len) }
     };
     let result = unsafe { CallbackContext::<SessionDelegateCell>::with(user_info, site, invoke) };
     delegate_status(result, error_out, callback)
@@ -528,7 +525,8 @@ unsafe extern "C" fn token_session_sign_trampoline(
     data_len: usize,
     object_id_ptr: *const c_char,
     algorithm_raw: *mut c_void,
-    out_reply_json: *mut *mut c_char,
+    out_reply_bytes: *mut *mut u8,
+    out_reply_len: *mut usize,
     error_out: *mut *mut c_char,
 ) -> i32 {
     unsafe {
@@ -539,7 +537,8 @@ unsafe extern "C" fn token_session_sign_trampoline(
             data_len,
             object_id_ptr,
             algorithm_raw,
-            out_reply_json,
+            out_reply_bytes,
+            out_reply_len,
             error_out,
             0,
         )
@@ -553,7 +552,8 @@ unsafe extern "C" fn token_session_decrypt_trampoline(
     data_len: usize,
     object_id_ptr: *const c_char,
     algorithm_raw: *mut c_void,
-    out_reply_json: *mut *mut c_char,
+    out_reply_bytes: *mut *mut u8,
+    out_reply_len: *mut usize,
     error_out: *mut *mut c_char,
 ) -> i32 {
     unsafe {
@@ -564,7 +564,8 @@ unsafe extern "C" fn token_session_decrypt_trampoline(
             data_len,
             object_id_ptr,
             algorithm_raw,
-            out_reply_json,
+            out_reply_bytes,
+            out_reply_len,
             error_out,
             1,
         )
@@ -579,7 +580,8 @@ unsafe extern "C" fn token_session_key_exchange_trampoline(
     object_id_ptr: *const c_char,
     algorithm_raw: *mut c_void,
     parameters_raw: *mut c_void,
-    out_reply_json: *mut *mut c_char,
+    out_reply_bytes: *mut *mut u8,
+    out_reply_len: *mut usize,
     error_out: *mut *mut c_char,
 ) -> i32 {
     let session = TokenSession::from_raw(session_raw);
@@ -604,19 +606,14 @@ unsafe extern "C" fn token_session_key_exchange_trampoline(
             object_id_ptr,
             "missing token object identifier",
         )?);
-        let reply = lock(delegate).perform_key_exchange(
+        let reply = Zeroizing::new(lock(delegate).perform_key_exchange(
             &session,
             public_key,
             &object_id,
             &algorithm,
             &parameters,
-        )?;
-        if !out_reply_json.is_null() {
-            unsafe {
-                *out_reply_json = json_to_ptr(&reply)?;
-            }
-        }
-        Ok(())
+        )?);
+        unsafe { write_secret_reply(&reply, out_reply_bytes, out_reply_len) }
     };
     let result = unsafe {
         CallbackContext::<SessionDelegateCell>::with(
@@ -929,14 +926,16 @@ impl TokenSession {
             *const c_char,
             *const c_char,
             *const c_char,
-            *mut *mut c_char,
+            *mut *mut u8,
+            *mut usize,
             *mut *mut c_char,
         ) -> i32,
-    ) -> Result<Vec<u8>, CryptoTokenKitError> {
+    ) -> Result<Zeroizing<Vec<u8>>, CryptoTokenKitError> {
         let object_id = to_cstring(&key_object_id.0)?;
         let base_algorithm = to_cstring(base_algorithm)?;
         let supported_algorithms = encode_json_cstring(supported_algorithms)?;
-        let mut reply_ptr = ptr::null_mut();
+        let mut reply_bytes = ptr::null_mut();
+        let mut reply_len = 0usize;
         let mut error_ptr = ptr::null_mut();
         let status = unsafe {
             callback(
@@ -947,15 +946,14 @@ impl TokenSession {
                 object_id.as_ptr(),
                 base_algorithm.as_ptr(),
                 supported_algorithms.as_ptr(),
-                &raw mut reply_ptr,
+                &raw mut reply_bytes,
+                &raw mut reply_len,
                 &raw mut error_ptr,
             )
         };
+        let reply = unsafe { take_secret_bytes(reply_bytes, reply_len) };
         status_result(status, error_ptr)?;
-        if reply_ptr.is_null() {
-            return Ok(Vec::new());
-        }
-        decode_json(reply_ptr)
+        Ok(reply)
     }
 
     /// Invokes the bridged `TKTokenSession` delegate callback.
@@ -974,6 +972,7 @@ impl TokenSession {
             supported_algorithms,
             ffi::token_delegate::ctk_token_session_invoke_delegate_sign,
         )
+        .map(|signature| signature.to_vec())
     }
 
     /// Invokes the bridged `TKTokenSession` delegate callback.
@@ -983,7 +982,7 @@ impl TokenSession {
         key_object_id: &TokenObjectId,
         base_algorithm: &str,
         supported_algorithms: &[&str],
-    ) -> Result<Vec<u8>, CryptoTokenKitError> {
+    ) -> Result<Zeroizing<Vec<u8>>, CryptoTokenKitError> {
         self.invoke_delegate_data_operation(
             TokenOperation::DecryptData,
             ciphertext,
@@ -1003,11 +1002,12 @@ impl TokenSession {
         supported_algorithms: &[&str],
         requested_size: isize,
         shared_info: Option<&[u8]>,
-    ) -> Result<Vec<u8>, CryptoTokenKitError> {
+    ) -> Result<Zeroizing<Vec<u8>>, CryptoTokenKitError> {
         let object_id = to_cstring(&object_id.0)?;
         let base_algorithm = to_cstring(base_algorithm)?;
         let supported_algorithms = encode_json_cstring(supported_algorithms)?;
-        let mut reply_ptr = ptr::null_mut();
+        let mut reply_bytes = ptr::null_mut();
+        let mut reply_len = 0usize;
         let mut error_ptr = ptr::null_mut();
         let (shared_info_ptr, shared_info_len, has_shared_info) = shared_info
             .map_or((ptr::null(), 0, false), |bytes| {
@@ -1025,15 +1025,14 @@ impl TokenSession {
                 shared_info_ptr,
                 shared_info_len,
                 has_shared_info,
-                &raw mut reply_ptr,
+                &raw mut reply_bytes,
+                &raw mut reply_len,
                 &raw mut error_ptr,
             )
         };
+        let reply = unsafe { take_secret_bytes(reply_bytes, reply_len) };
         status_result(status, error_ptr)?;
-        if reply_ptr.is_null() {
-            return Ok(Vec::new());
-        }
-        decode_json(reply_ptr)
+        Ok(reply)
     }
 }
 

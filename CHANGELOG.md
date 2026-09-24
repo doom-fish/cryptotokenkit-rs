@@ -41,6 +41,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `CryptoTokenKitError::InvalidArgument`. Objects returned by Rust delegates
   are checked too, and a mismatch fails the callback instead of being replaced
   with a newly made default session, token or auth operation.
+- Data a Rust `TokenSessionDelegate` returned from `sign_data`,
+  `decrypt_data` or `perform_key_exchange` (decrypted plaintext and shared
+  secrets among it) crossed the bridge as a JSON array of numbers, leaving
+  unwiped copies in Rust, in the C string and in Swift. It now travels in a
+  byte buffer that is wiped once Swift has made the `Data` it hands to
+  CryptoTokenKit, and the Rust copies are `Zeroizing`.
 
 ### Fixed
 
@@ -115,6 +121,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `SmartCardUserInteractionForSecurePinVerification` and
   `SmartCardUserInteractionForSecurePinChange` no longer implement `DerefMut`;
   `Deref` remains, and every method takes `&self`.
+- **Breaking:** `TokenSession::invoke_delegate_decrypt_data` and
+  `invoke_delegate_perform_key_exchange` return
+  `Result<Zeroizing<Vec<u8>>, CryptoTokenKitError>`.
 - **Breaking:** The failures listed under Fixed that used to be
   `FrameworkError` are now `InvalidArgument`, `Unsupported` or
   `Unknown { code }` carrying the `TKError` code.

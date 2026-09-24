@@ -242,7 +242,7 @@ fn token_delegates_and_gap_fill_helpers_work() -> Result<(), Box<dyn std::error:
         b"cba"
     );
     assert_eq!(
-        session.invoke_delegate_decrypt_data(
+        *session.invoke_delegate_decrypt_data(
             b"cipher",
             &key_id,
             "com.example.base",
@@ -251,7 +251,7 @@ fn token_delegates_and_gap_fill_helpers_work() -> Result<(), Box<dyn std::error:
         b"cipher"
     );
     assert_eq!(
-        session.invoke_delegate_perform_key_exchange(
+        *session.invoke_delegate_perform_key_exchange(
             &[0x01, 0x02, 0x03],
             &key_id,
             "com.example.base",

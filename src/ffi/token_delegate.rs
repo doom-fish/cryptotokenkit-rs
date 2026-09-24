@@ -22,7 +22,8 @@ pub type TokenSessionDataCallback = Option<
         usize,
         *const c_char,
         *mut c_void,
-        *mut *mut c_char,
+        *mut *mut u8,
+        *mut usize,
         *mut *mut c_char,
     ) -> i32,
 >;
@@ -36,7 +37,8 @@ pub type TokenSessionKeyExchangeCallback = Option<
         *const c_char,
         *mut c_void,
         *mut c_void,
-        *mut *mut c_char,
+        *mut *mut u8,
+        *mut usize,
         *mut *mut c_char,
     ) -> i32,
 >;
@@ -122,7 +124,8 @@ unsafe extern "C" {
         object_id: *const c_char,
         base_algorithm: *const c_char,
         supported_algorithms_json: *const c_char,
-        out_reply_json: *mut *mut c_char,
+        out_reply_bytes: *mut *mut u8,
+        out_reply_len: *mut usize,
         error_out: *mut *mut c_char,
     ) -> i32;
     pub fn ctk_token_session_invoke_delegate_decrypt(
@@ -133,7 +136,8 @@ unsafe extern "C" {
         object_id: *const c_char,
         base_algorithm: *const c_char,
         supported_algorithms_json: *const c_char,
-        out_reply_json: *mut *mut c_char,
+        out_reply_bytes: *mut *mut u8,
+        out_reply_len: *mut usize,
         error_out: *mut *mut c_char,
     ) -> i32;
     pub fn ctk_token_session_invoke_delegate_key_exchange(
@@ -147,7 +151,8 @@ unsafe extern "C" {
         shared_info_ptr: *const u8,
         shared_info_len: usize,
         has_shared_info: bool,
-        out_reply_json: *mut *mut c_char,
+        out_reply_bytes: *mut *mut u8,
+        out_reply_len: *mut usize,
         error_out: *mut *mut c_char,
     ) -> i32;
 

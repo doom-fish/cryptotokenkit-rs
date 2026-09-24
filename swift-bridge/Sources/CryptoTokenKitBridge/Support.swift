@@ -18,6 +18,32 @@ func ctkTakeJSONValue(_ ptr: UnsafeMutablePointer<CChar>?) -> Any? {
     return try? JSONSerialization.jsonObject(with: data)
 }
 
+func ctkTakeSecretBuffer(_ bytes: UnsafeMutablePointer<UInt8>?, _ length: Int) -> Data {
+    guard let bytes else { return Data() }
+    let count = max(length, 0)
+    let data = Data(bytes: bytes, count: count)
+    _ = memset_s(bytes, count, 0, count)
+    free(bytes)
+    return data
+}
+
+func ctkCopySecretBuffer(
+    _ data: inout Data,
+    _ outBytes: UnsafeMutablePointer<UnsafeMutablePointer<UInt8>?>,
+    _ outLength: UnsafeMutablePointer<Int>,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+) -> Int32 {
+    defer { data.resetBytes(in: 0..<data.count) }
+    guard let buffer = malloc(max(data.count, 1))?.assumingMemoryBound(to: UInt8.self) else {
+        ctkWriteError(errorOut, "failed to allocate a reply buffer")
+        return CTK_FRAMEWORK_ERROR
+    }
+    data.copyBytes(to: buffer, count: data.count)
+    outBytes.pointee = buffer
+    outLength.pointee = data.count
+    return CTK_OK
+}
+
 func ctkNSError(status: Int32, message: String) -> NSError {
     NSError(
         domain: TKErrorDomain,

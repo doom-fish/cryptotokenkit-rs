@@ -25,7 +25,8 @@ public typealias CTKTokenSessionDataCallback = @convention(c) (
     Int,
     UnsafePointer<CChar>?,
     UnsafeMutableRawPointer?,
-    UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?,
+    UnsafeMutablePointer<UnsafeMutablePointer<UInt8>?>?,
+    UnsafeMutablePointer<Int>?,
     UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> Int32
 
@@ -37,7 +38,8 @@ public typealias CTKTokenSessionKeyExchangeCallback = @convention(c) (
     UnsafePointer<CChar>?,
     UnsafeMutableRawPointer?,
     UnsafeMutableRawPointer?,
-    UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?,
+    UnsafeMutablePointer<UnsafeMutablePointer<UInt8>?>?,
+    UnsafeMutablePointer<Int>?,
     UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> Int32
 
@@ -175,7 +177,8 @@ private final class CTKTokenSessionDelegateBox: NSObject, TKTokenSessionDelegate
         objectID: String,
         algorithm: TKTokenKeyAlgorithm
     ) throws -> Data {
-        var replyJSON: UnsafeMutablePointer<CChar>?
+        var replyBytes: UnsafeMutablePointer<UInt8>?
+        var replyLength = 0
         var errorCString: UnsafeMutablePointer<CChar>?
         let status = data.withUnsafeBytes { bytes in
             objectID.withCString { objectIDCString in
@@ -186,18 +189,20 @@ private final class CTKTokenSessionDelegateBox: NSObject, TKTokenSessionDelegate
                     data.count,
                     objectIDCString,
                     ctkRetain(algorithm),
-                    &replyJSON,
+                    &replyBytes,
+                    &replyLength,
                     &errorCString
                 )
             }
         }
+        let reply = ctkTakeSecretBuffer(replyBytes, replyLength)
         guard status == CTK_OK else {
             throw ctkNSError(
                 status: status,
                 message: ctkTakeCString(errorCString).ifEmpty("token-session delegate data operation failed")
             )
         }
-        return ctkData(from: ctkTakeJSONValue(replyJSON)) ?? Data()
+        return reply
     }
 
     func invokeKeyExchange(
@@ -207,7 +212,8 @@ private final class CTKTokenSessionDelegateBox: NSObject, TKTokenSessionDelegate
         algorithm: TKTokenKeyAlgorithm,
         parameters: TKTokenKeyExchangeParameters
     ) throws -> Data {
-        var replyJSON: UnsafeMutablePointer<CChar>?
+        var replyBytes: UnsafeMutablePointer<UInt8>?
+        var replyLength = 0
         var errorCString: UnsafeMutablePointer<CChar>?
         let status = publicKeyData.withUnsafeBytes { bytes in
             objectID.withCString { objectIDCString in
@@ -219,18 +225,20 @@ private final class CTKTokenSessionDelegateBox: NSObject, TKTokenSessionDelegate
                     objectIDCString,
                     ctkRetain(algorithm),
                     ctkRetain(parameters),
-                    &replyJSON,
+                    &replyBytes,
+                    &replyLength,
                     &errorCString
                 )
             }
         }
+        let reply = ctkTakeSecretBuffer(replyBytes, replyLength)
         guard status == CTK_OK else {
             throw ctkNSError(
                 status: status,
                 message: ctkTakeCString(errorCString).ifEmpty("token-session delegate key exchange failed")
             )
         }
-        return ctkData(from: ctkTakeJSONValue(replyJSON)) ?? Data()
+        return reply
     }
 
     func tokenSession(
@@ -645,11 +653,13 @@ private func ctkInvokeTokenSessionDataDelegate(
     objectID: UnsafePointer<CChar>?,
     baseAlgorithm: UnsafePointer<CChar>?,
     supportedAlgorithmsJSON: UnsafePointer<CChar>?,
-    outReplyJSON: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>,
+    outReplyBytes: UnsafeMutablePointer<UnsafeMutablePointer<UInt8>?>,
+    outReplyLength: UnsafeMutablePointer<Int>,
     errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?,
     callback: (CTKTokenSessionDelegateBox, TKTokenSession, Data, String, TKTokenKeyAlgorithm) throws -> Data
 ) -> Int32 {
-    outReplyJSON.pointee = nil
+    outReplyBytes.pointee = nil
+    outReplyLength.pointee = 0
     guard let sessionPtr, let requestPtr, let objectID,
           let algorithm = ctkMockTokenKeyAlgorithm(
               baseAlgorithm: baseAlgorithm,
@@ -664,15 +674,14 @@ private func ctkInvokeTokenSessionDataDelegate(
         return CTK_FRAMEWORK_ERROR
     }
     do {
-        let reply = try callback(
+        var reply = try callback(
             delegate,
             session,
             Data(bytes: requestPtr, count: requestLen),
             String(cString: objectID),
             algorithm
         )
-        outReplyJSON.pointee = ctkCString(ctkJSONString([UInt8](reply)))
-        return CTK_OK
+        return ctkCopySecretBuffer(&reply, outReplyBytes, outReplyLength, errorOut)
     } catch {
         ctkWriteNSError(errorOut, fallback: "token-session delegate invocation failed", error: error)
         return ctkStatus(from: error)
@@ -688,7 +697,8 @@ public func ctk_token_session_invoke_delegate_sign(
     _ objectID: UnsafePointer<CChar>?,
     _ baseAlgorithm: UnsafePointer<CChar>?,
     _ supportedAlgorithmsJSON: UnsafePointer<CChar>?,
-    _ outReplyJSON: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>,
+    _ outReplyBytes: UnsafeMutablePointer<UnsafeMutablePointer<UInt8>?>,
+    _ outReplyLength: UnsafeMutablePointer<Int>,
     _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> Int32 {
     ctkInvokeTokenSessionDataDelegate(
@@ -699,7 +709,8 @@ public func ctk_token_session_invoke_delegate_sign(
         objectID: objectID,
         baseAlgorithm: baseAlgorithm,
         supportedAlgorithmsJSON: supportedAlgorithmsJSON,
-        outReplyJSON: outReplyJSON,
+        outReplyBytes: outReplyBytes,
+        outReplyLength: outReplyLength,
         errorOut: errorOut
     ) { delegate, session, data, objectID, algorithm in
         try delegate.tokenSession(
@@ -720,7 +731,8 @@ public func ctk_token_session_invoke_delegate_decrypt(
     _ objectID: UnsafePointer<CChar>?,
     _ baseAlgorithm: UnsafePointer<CChar>?,
     _ supportedAlgorithmsJSON: UnsafePointer<CChar>?,
-    _ outReplyJSON: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>,
+    _ outReplyBytes: UnsafeMutablePointer<UnsafeMutablePointer<UInt8>?>,
+    _ outReplyLength: UnsafeMutablePointer<Int>,
     _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> Int32 {
     ctkInvokeTokenSessionDataDelegate(
@@ -731,7 +743,8 @@ public func ctk_token_session_invoke_delegate_decrypt(
         objectID: objectID,
         baseAlgorithm: baseAlgorithm,
         supportedAlgorithmsJSON: supportedAlgorithmsJSON,
-        outReplyJSON: outReplyJSON,
+        outReplyBytes: outReplyBytes,
+        outReplyLength: outReplyLength,
         errorOut: errorOut
     ) { delegate, session, data, objectID, algorithm in
         try delegate.tokenSession(
@@ -755,10 +768,12 @@ public func ctk_token_session_invoke_delegate_key_exchange(
     _ sharedInfoPtr: UnsafePointer<UInt8>?,
     _ sharedInfoLen: Int,
     _ hasSharedInfo: Bool,
-    _ outReplyJSON: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>,
+    _ outReplyBytes: UnsafeMutablePointer<UnsafeMutablePointer<UInt8>?>,
+    _ outReplyLength: UnsafeMutablePointer<Int>,
     _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> Int32 {
-    outReplyJSON.pointee = nil
+    outReplyBytes.pointee = nil
+    outReplyLength.pointee = 0
     guard let sessionPtr, let publicKeyPtr, let objectID,
           let algorithm = ctkMockTokenKeyAlgorithm(
               baseAlgorithm: baseAlgorithm,
@@ -779,15 +794,14 @@ public func ctk_token_session_invoke_delegate_key_exchange(
         hasSharedInfo: hasSharedInfo
     )
     do {
-        let reply = try delegate.tokenSession(
+        var reply = try delegate.tokenSession(
             session,
             performKeyExchange: Data(bytes: publicKeyPtr, count: publicKeyLen),
             keyObjectID: String(cString: objectID),
             algorithm: algorithm,
             parameters: parameters
         )
-        outReplyJSON.pointee = ctkCString(ctkJSONString([UInt8](reply)))
-        return CTK_OK
+        return ctkCopySecretBuffer(&reply, outReplyBytes, outReplyLength, errorOut)
     } catch {
         ctkWriteNSError(errorOut, fallback: "token-session delegate key exchange failed", error: error)
         return ctkStatus(from: error)

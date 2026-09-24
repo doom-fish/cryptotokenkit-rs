@@ -5,6 +5,7 @@ use core::ffi::c_char;
 use libc::strdup;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use zeroize::{Zeroize, Zeroizing};
 
 use crate::error::CryptoTokenKitError;
 use crate::ffi;
@@ -70,6 +71,39 @@ pub fn checked<T>(call: impl FnOnce(*mut *mut c_char) -> T) -> Result<T, CryptoT
     }
 }
 
+pub unsafe fn take_secret_bytes(bytes: *mut u8, len: usize) -> Zeroizing<Vec<u8>> {
+    if bytes.is_null() {
+        return Zeroizing::new(Vec::new());
+    }
+    let buffer = unsafe { std::slice::from_raw_parts_mut(bytes, len) };
+    let owned = Zeroizing::new(buffer.to_vec());
+    buffer.zeroize();
+    unsafe { libc::free(bytes.cast()) };
+    owned
+}
+
+pub unsafe fn write_secret_reply(
+    reply: &[u8],
+    out_bytes: *mut *mut u8,
+    out_len: *mut usize,
+) -> Result<(), CryptoTokenKitError> {
+    if out_bytes.is_null() || out_len.is_null() {
+        return Ok(());
+    }
+    let buffer = unsafe { libc::malloc(reply.len().max(1)) }.cast::<u8>();
+    if buffer.is_null() {
+        return Err(CryptoTokenKitError::FrameworkError(
+            "failed to allocate a reply buffer".into(),
+        ));
+    }
+    unsafe {
+        ptr::copy_nonoverlapping(reply.as_ptr(), buffer, reply.len());
+        *out_bytes = buffer;
+        *out_len = reply.len();
+    }
+    Ok(())
+}
+
 #[must_use]
 pub fn clone_cstring_ptr(value: &CString) -> *mut c_char {
     unsafe { strdup(value.as_ptr()) }
@@ -87,10 +121,6 @@ pub fn write_error_ptr(error_out: *mut *mut c_char, message: &str) {
     unsafe {
         *error_out = string_to_ptr(message);
     }
-}
-
-pub fn json_to_ptr<T: Serialize + ?Sized>(value: &T) -> Result<*mut c_char, CryptoTokenKitError> {
-    encode_json_cstring(value).map(|cstring| clone_cstring_ptr(&cstring))
 }
 
 #[cfg(test)]
