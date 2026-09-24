@@ -67,38 +67,6 @@ private final class CTKSmartCardUserInteractionDelegateBox: NSObject, TKSmartCar
     }
 }
 
-private struct CTKMockPinInteractionState {
-    var completion = UInt32(TKSmartCardUserInteractionForPINOperation.Completion.key.rawValue)
-    var messageIndices: [NSNumber]?
-    var localeIdentifier = Locale.current.identifier
-    var resultSW: UInt16 = 0
-    var resultData: Data?
-    var confirmation: UInt32 = 0
-}
-
-private let ctkMockPinInteractionStateLock = NSLock()
-private var ctkMockPinInteractionStates: [ObjectIdentifier: CTKMockPinInteractionState] = [:]
-
-private func ctkSetMockPinInteractionState(
-    for interaction: TKSmartCardUserInteraction,
-    _ update: (inout CTKMockPinInteractionState) -> Void
-) {
-    ctkMockPinInteractionStateLock.lock()
-    defer { ctkMockPinInteractionStateLock.unlock() }
-    let key = ObjectIdentifier(interaction)
-    var state = ctkMockPinInteractionStates[key] ?? CTKMockPinInteractionState()
-    update(&state)
-    ctkMockPinInteractionStates[key] = state
-}
-
-private func ctkMockPinInteractionState(
-    for interaction: TKSmartCardUserInteraction
-) -> CTKMockPinInteractionState? {
-    ctkMockPinInteractionStateLock.lock()
-    defer { ctkMockPinInteractionStateLock.unlock() }
-    return ctkMockPinInteractionStates[ObjectIdentifier(interaction)]
-}
-
 private class CTKMockSmartCardUserInteractionBase: TKSmartCardUserInteraction {
     private var isRunning = false
 
@@ -338,14 +306,6 @@ private final class CTKMockSmartCard: TKSmartCard {
         interaction.pinMessageIndices = nil
         interaction.resultSW = 0
         interaction.resultData = nil
-        ctkSetMockPinInteractionState(for: interaction) { state in
-            state.completion = UInt32(TKSmartCardUserInteractionForPINOperation.Completion.key.rawValue)
-            state.messageIndices = nil
-            state.localeIdentifier = Locale.current.identifier
-            state.resultSW = 0
-            state.resultData = nil
-            state.confirmation = 0
-        }
         return interaction
     }
 
@@ -363,14 +323,6 @@ private final class CTKMockSmartCard: TKSmartCard {
         interaction.pinConfirmation = []
         interaction.resultSW = 0
         interaction.resultData = nil
-        ctkSetMockPinInteractionState(for: interaction) { state in
-            state.completion = UInt32(TKSmartCardUserInteractionForPINOperation.Completion.key.rawValue)
-            state.messageIndices = nil
-            state.localeIdentifier = Locale.current.identifier
-            state.resultSW = 0
-            state.resultData = nil
-            state.confirmation = 0
-        }
         return interaction
     }
 
@@ -552,9 +504,6 @@ public func ctk_smart_card_pin_interaction_completion(
     _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> UInt32 {
     guard let interaction = ctkBorrow(interactionPtr, as: TKSmartCardUserInteractionForPINOperation.self, errorOut) else { return 0 }
-    if let state = ctkMockPinInteractionState(for: interaction) {
-        return state.completion
-    }
     return UInt32(interaction.pinCompletion.rawValue)
 }
 
@@ -565,7 +514,6 @@ public func ctk_smart_card_pin_interaction_set_completion(
     _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) {
     guard let interaction = ctkBorrow(interactionPtr, as: TKSmartCardUserInteractionForPINOperation.self, errorOut) else { return }
-    ctkSetMockPinInteractionState(for: interaction) { $0.completion = completion }
     interaction.pinCompletion = TKSmartCardUserInteractionForPINOperation.Completion(rawValue: UInt(completion))
 }
 
@@ -575,8 +523,7 @@ public func ctk_smart_card_pin_interaction_message_indices_json(
     _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> UnsafeMutablePointer<CChar>? {
     guard let interaction = ctkBorrow(interactionPtr, as: TKSmartCardUserInteractionForPINOperation.self, errorOut) else { return nil }
-    let messageIndices = ctkMockPinInteractionState(for: interaction)?.messageIndices ?? interaction.pinMessageIndices
-    guard let messageIndices else {
+    guard let messageIndices = interaction.pinMessageIndices else {
         return nil
     }
     return ctkCString(ctkJSONString(messageIndices))
@@ -600,10 +547,8 @@ public func ctk_smart_card_pin_interaction_set_message_indices_json(
             ctkWriteError(errorOut, "invalid smart-card PIN message-indices JSON")
             return CTK_INVALID_ARGUMENT
         }
-        ctkSetMockPinInteractionState(for: interaction) { $0.messageIndices = indices }
         interaction.pinMessageIndices = indices
     } else {
-        ctkSetMockPinInteractionState(for: interaction) { $0.messageIndices = nil }
         interaction.pinMessageIndices = nil
     }
     return CTK_OK
@@ -615,9 +560,7 @@ public func ctk_smart_card_pin_interaction_locale_identifier(
     _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> UnsafeMutablePointer<CChar>? {
     guard let interaction = ctkBorrow(interactionPtr, as: TKSmartCardUserInteractionForPINOperation.self, errorOut) else { return nil }
-    let identifier = ctkMockPinInteractionState(for: interaction)?.localeIdentifier
-        ?? interaction.locale?.identifier
-        ?? Locale.current.identifier
+    let identifier = interaction.locale?.identifier ?? Locale.current.identifier
     return ctkCString(identifier)
 }
 
@@ -636,7 +579,6 @@ public func ctk_smart_card_pin_interaction_set_locale_identifier(
     let locale = hasIdentifier && identifier != nil
         ? Locale(identifier: String(cString: identifier!))
         : Locale.current
-    ctkSetMockPinInteractionState(for: interaction) { $0.localeIdentifier = locale.identifier }
     interaction.locale = locale
     return CTK_OK
 }
@@ -647,7 +589,7 @@ public func ctk_smart_card_pin_interaction_result_sw(
     _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> UInt16 {
     guard let interaction = ctkBorrow(interactionPtr, as: TKSmartCardUserInteractionForPINOperation.self, errorOut) else { return 0 }
-    return ctkMockPinInteractionState(for: interaction)?.resultSW ?? interaction.resultSW
+    return interaction.resultSW
 }
 
 @_cdecl("ctk_smart_card_pin_interaction_result_data_json")
@@ -656,8 +598,7 @@ public func ctk_smart_card_pin_interaction_result_data_json(
     _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> UnsafeMutablePointer<CChar>? {
     guard let interaction = ctkBorrow(interactionPtr, as: TKSmartCardUserInteractionForPINOperation.self, errorOut) else { return nil }
-    let resultData = ctkMockPinInteractionState(for: interaction)?.resultData ?? interaction.resultData
-    guard let resultData else {
+    guard let resultData = interaction.resultData else {
         return nil
     }
     return ctkCString(ctkJSONString([UInt8](resultData)))
@@ -669,8 +610,7 @@ public func ctk_smart_card_pin_change_interaction_confirmation(
     _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> UInt32 {
     guard let interaction = ctkBorrow(interactionPtr, as: TKSmartCardUserInteractionForSecurePINChange.self, errorOut) else { return 0 }
-    return ctkMockPinInteractionState(for: interaction)?.confirmation
-        ?? UInt32(interaction.pinConfirmation.rawValue)
+    return UInt32(interaction.pinConfirmation.rawValue)
 }
 
 @_cdecl("ctk_smart_card_pin_change_interaction_set_confirmation")
@@ -680,7 +620,6 @@ public func ctk_smart_card_pin_change_interaction_set_confirmation(
     _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) {
     guard let interaction = ctkBorrow(interactionPtr, as: TKSmartCardUserInteractionForSecurePINChange.self, errorOut) else { return }
-    ctkSetMockPinInteractionState(for: interaction) { $0.confirmation = confirmation }
     interaction.pinConfirmation = TKSmartCardUserInteractionForSecurePINChange.Confirmation(rawValue: UInt(confirmation))
 }
 

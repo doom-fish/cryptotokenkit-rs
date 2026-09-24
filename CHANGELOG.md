@@ -65,6 +65,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Token::set_configuration_data` stored their values in process-local
   dictionaries (the configuration data keyed by object address, so a later
   token could read another token's data). They now use the framework.
+- The PIN-interaction getters (`pin_completion`, `pin_message_indices`,
+  `locale_identifier`, `result_status_word`, `result_data`,
+  `pin_confirmation`) preferred a process-wide table that every setter wrote
+  to. Once a setter had run, `result_status_word` and `result_data` returned
+  stale values instead of the card's reply, and the table, keyed by object
+  address, grew with every interaction. The getters now read the interaction.
 - Token and smart-card-token constructors, token configuration, key and
   certificate lookups, `keychain_contents_items`, `get_smart_card`, the
   token-watcher queries, `slot_names` and the secure-PIN interaction
