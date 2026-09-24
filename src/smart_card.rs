@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::CryptoTokenKitError;
 use crate::ffi;
-use crate::private::{decode_json, status_result};
+use crate::private::{checked, decode_json, status_result};
 use crate::smart_card_atr::SmartCardProtocol;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -155,7 +155,8 @@ impl SmartCard {
 
     /// Wraps the corresponding `TKSmartCard` operation.
     pub fn slot_name(&self) -> Result<String, CryptoTokenKitError> {
-        let ptr = unsafe { ffi::smart_card::ctk_smart_card_slot_name(self.raw) };
+        let ptr =
+            checked(|error| unsafe { ffi::smart_card::ctk_smart_card_slot_name(self.raw, error) })?;
         if ptr.is_null() {
             return Err(CryptoTokenKitError::FrameworkError(
                 "Swift bridge returned a null slot name".into(),
@@ -164,82 +165,96 @@ impl SmartCard {
         Ok(crate::error::take_owned_c_string(ptr))
     }
 
-    #[must_use]
     /// Wraps the corresponding `TKSmartCard` operation.
-    pub fn valid(&self) -> bool {
-        unsafe { ffi::smart_card::ctk_smart_card_valid(self.raw) }
+    pub fn valid(&self) -> Result<bool, CryptoTokenKitError> {
+        checked(|error| unsafe { ffi::smart_card::ctk_smart_card_valid(self.raw, error) })
     }
 
-    #[must_use]
     /// Wraps the corresponding `TKSmartCard` operation.
-    pub fn allowed_protocols(&self) -> SmartCardProtocol {
-        SmartCardProtocol::from_bits(unsafe {
-            ffi::smart_card::ctk_smart_card_allowed_protocols(self.raw)
+    pub fn allowed_protocols(&self) -> Result<SmartCardProtocol, CryptoTokenKitError> {
+        checked(|error| unsafe {
+            ffi::smart_card::ctk_smart_card_allowed_protocols(self.raw, error)
+        })
+        .map(SmartCardProtocol::from_bits)
+    }
+
+    /// Sets the corresponding `TKSmartCard` value.
+    pub fn set_allowed_protocols(
+        &self,
+        protocols: SmartCardProtocol,
+    ) -> Result<(), CryptoTokenKitError> {
+        checked(|error| unsafe {
+            ffi::smart_card::ctk_smart_card_set_allowed_protocols(
+                self.raw,
+                protocols.bits(),
+                error,
+            );
+        })
+    }
+
+    /// Wraps the corresponding `TKSmartCard` operation.
+    pub fn current_protocol(&self) -> Result<SmartCardProtocol, CryptoTokenKitError> {
+        checked(|error| unsafe {
+            ffi::smart_card::ctk_smart_card_current_protocol(self.raw, error)
+        })
+        .map(SmartCardProtocol::from_bits)
+    }
+
+    /// Wraps the corresponding `TKSmartCard` operation.
+    pub fn sensitive(&self) -> Result<bool, CryptoTokenKitError> {
+        checked(|error| unsafe { ffi::smart_card::ctk_smart_card_sensitive(self.raw, error) })
+    }
+
+    /// Sets the corresponding `TKSmartCard` value.
+    pub fn set_sensitive(&self, sensitive: bool) -> Result<(), CryptoTokenKitError> {
+        checked(|error| unsafe {
+            ffi::smart_card::ctk_smart_card_set_sensitive(self.raw, sensitive, error);
+        })
+    }
+
+    /// Wraps the corresponding `TKSmartCard` operation.
+    pub fn cla(&self) -> Result<u8, CryptoTokenKitError> {
+        checked(|error| unsafe { ffi::smart_card::ctk_smart_card_cla(self.raw, error) })
+    }
+
+    /// Sets the corresponding `TKSmartCard` value.
+    pub fn set_cla(&self, cla: u8) -> Result<(), CryptoTokenKitError> {
+        checked(|error| unsafe { ffi::smart_card::ctk_smart_card_set_cla(self.raw, cla, error) })
+    }
+
+    /// Wraps the corresponding `TKSmartCard` operation.
+    pub fn use_extended_length(&self) -> Result<bool, CryptoTokenKitError> {
+        checked(|error| unsafe {
+            ffi::smart_card::ctk_smart_card_use_extended_length(self.raw, error)
         })
     }
 
     /// Sets the corresponding `TKSmartCard` value.
-    pub fn set_allowed_protocols(&self, protocols: SmartCardProtocol) {
-        unsafe {
-            ffi::smart_card::ctk_smart_card_set_allowed_protocols(self.raw, protocols.bits());
-        };
-    }
-
-    #[must_use]
-    /// Wraps the corresponding `TKSmartCard` operation.
-    pub fn current_protocol(&self) -> SmartCardProtocol {
-        SmartCardProtocol::from_bits(unsafe {
-            ffi::smart_card::ctk_smart_card_current_protocol(self.raw)
+    pub fn set_use_extended_length(&self, enabled: bool) -> Result<(), CryptoTokenKitError> {
+        checked(|error| unsafe {
+            ffi::smart_card::ctk_smart_card_set_use_extended_length(self.raw, enabled, error);
         })
     }
 
-    #[must_use]
     /// Wraps the corresponding `TKSmartCard` operation.
-    pub fn sensitive(&self) -> bool {
-        unsafe { ffi::smart_card::ctk_smart_card_sensitive(self.raw) }
+    pub fn use_command_chaining(&self) -> Result<bool, CryptoTokenKitError> {
+        checked(|error| unsafe {
+            ffi::smart_card::ctk_smart_card_use_command_chaining(self.raw, error)
+        })
     }
 
     /// Sets the corresponding `TKSmartCard` value.
-    pub fn set_sensitive(&self, sensitive: bool) {
-        unsafe { ffi::smart_card::ctk_smart_card_set_sensitive(self.raw, sensitive) };
-    }
-
-    #[must_use]
-    /// Wraps the corresponding `TKSmartCard` operation.
-    pub fn cla(&self) -> u8 {
-        unsafe { ffi::smart_card::ctk_smart_card_cla(self.raw) }
-    }
-
-    /// Sets the corresponding `TKSmartCard` value.
-    pub fn set_cla(&self, cla: u8) {
-        unsafe { ffi::smart_card::ctk_smart_card_set_cla(self.raw, cla) };
-    }
-
-    #[must_use]
-    /// Wraps the corresponding `TKSmartCard` operation.
-    pub fn use_extended_length(&self) -> bool {
-        unsafe { ffi::smart_card::ctk_smart_card_use_extended_length(self.raw) }
-    }
-
-    /// Sets the corresponding `TKSmartCard` value.
-    pub fn set_use_extended_length(&self, enabled: bool) {
-        unsafe { ffi::smart_card::ctk_smart_card_set_use_extended_length(self.raw, enabled) };
-    }
-
-    #[must_use]
-    /// Wraps the corresponding `TKSmartCard` operation.
-    pub fn use_command_chaining(&self) -> bool {
-        unsafe { ffi::smart_card::ctk_smart_card_use_command_chaining(self.raw) }
-    }
-
-    /// Sets the corresponding `TKSmartCard` value.
-    pub fn set_use_command_chaining(&self, enabled: bool) {
-        unsafe { ffi::smart_card::ctk_smart_card_set_use_command_chaining(self.raw, enabled) };
+    pub fn set_use_command_chaining(&self, enabled: bool) -> Result<(), CryptoTokenKitError> {
+        checked(|error| unsafe {
+            ffi::smart_card::ctk_smart_card_set_use_command_chaining(self.raw, enabled, error);
+        })
     }
 
     /// Wraps the corresponding `TKSmartCard` operation.
     pub fn context(&self) -> Result<Option<String>, CryptoTokenKitError> {
-        let ptr = unsafe { ffi::smart_card::ctk_smart_card_context_json(self.raw) };
+        let ptr = checked(|error| unsafe {
+            ffi::smart_card::ctk_smart_card_context_json(self.raw, error)
+        })?;
         if ptr.is_null() {
             return Ok(None);
         }
@@ -305,8 +320,8 @@ impl SmartCard {
     }
 
     /// Invokes the corresponding `TKSmartCard` operation.
-    pub fn end_session(&self) {
-        unsafe { ffi::smart_card::ctk_smart_card_end_session(self.raw) };
+    pub fn end_session(&self) -> Result<(), CryptoTokenKitError> {
+        checked(|error| unsafe { ffi::smart_card::ctk_smart_card_end_session(self.raw, error) })
     }
 
     /// Wraps the corresponding `TKSmartCard` operation.
@@ -367,7 +382,7 @@ struct SessionGuard<'a>(&'a SmartCard);
 
 impl Drop for SessionGuard<'_> {
     fn drop(&mut self) {
-        self.0.end_session();
+        let _ = self.0.end_session();
     }
 }
 
@@ -386,13 +401,18 @@ mod tests {
 
     use super::SmartCard;
     use crate::error::CryptoTokenKitError;
+    use crate::private::checked;
 
     unsafe extern "C" {
-        fn ctk_mock_smart_card_session_depth(card: *mut core::ffi::c_void) -> isize;
+        fn ctk_mock_smart_card_session_depth(
+            card: *mut core::ffi::c_void,
+            error_out: *mut *mut core::ffi::c_char,
+        ) -> isize;
     }
 
     fn session_depth(card: &SmartCard) -> isize {
-        unsafe { ctk_mock_smart_card_session_depth(card.raw()) }
+        checked(|error| unsafe { ctk_mock_smart_card_session_depth(card.raw(), error) })
+            .expect("mock card")
     }
 
     #[test]

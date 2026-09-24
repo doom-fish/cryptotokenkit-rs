@@ -19,7 +19,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     };
 
-    let Some(card) = slot.make_smart_card() else {
+    let Some(card) = slot.make_smart_card()? else {
         println!("no valid card inserted in {slot_name}; skipping APDU example");
         println!("✅ smart card session OK");
         return Ok(());

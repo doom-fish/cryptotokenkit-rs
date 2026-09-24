@@ -33,14 +33,17 @@ public func ctk_slot_manager_default() -> UnsafeMutableRawPointer? {
 @_cdecl("ctk_slot_manager_slot_names_json")
 public func ctk_slot_manager_slot_names_json(
     _ managerPtr: UnsafeMutableRawPointer?,
+    _ outJSON: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>,
     _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+) -> Int32 {
+    outJSON.pointee = nil
     guard let managerPtr else {
         ctkWriteError(errorOut, "missing smart-card slot manager")
-        return nil
+        return CTK_INVALID_ARGUMENT
     }
-    let manager: TKSmartCardSlotManager = ctkBorrow(managerPtr)
-    return ctkCString(ctkJSONString(manager.slotNames))
+    guard let manager = ctkBorrow(managerPtr, as: TKSmartCardSlotManager.self, errorOut) else { return CTK_INVALID_ARGUMENT }
+    outJSON.pointee = ctkCString(ctkJSONString(manager.slotNames))
+    return CTK_OK
 }
 
 @_cdecl("ctk_slot_manager_slot_named")
@@ -60,7 +63,7 @@ public func ctk_slot_manager_slot_named(
         return CTK_INVALID_ARGUMENT
     }
 
-    let manager: TKSmartCardSlotManager = ctkBorrow(managerPtr)
+    guard let manager = ctkBorrow(managerPtr, as: TKSmartCardSlotManager.self, errorOut) else { return CTK_INVALID_ARGUMENT }
     if let slot = manager.slotNamed(String(cString: name)) {
         outSlot.pointee = ctkRetain(slot)
     }
@@ -84,7 +87,7 @@ public func ctk_slot_manager_get_slot_with_name(
         return CTK_INVALID_ARGUMENT
     }
 
-    let manager: TKSmartCardSlotManager = ctkBorrow(managerPtr)
+    guard let manager = ctkBorrow(managerPtr, as: TKSmartCardSlotManager.self, errorOut) else { return CTK_INVALID_ARGUMENT }
     let pending = CTKPendingReply<TKSmartCardSlot?>()
     manager.getSlot(withName: String(cString: name)) { slot in
         _ = pending.complete(slot)
@@ -100,37 +103,47 @@ public func ctk_slot_manager_get_slot_with_name(
 }
 
 @_cdecl("ctk_slot_name")
-public func ctk_slot_name(_ slotPtr: UnsafeMutableRawPointer?) -> UnsafeMutablePointer<CChar>? {
-    guard let slotPtr else { return nil }
-    let slot: TKSmartCardSlot = ctkBorrow(slotPtr)
+public func ctk_slot_name(
+    _ slotPtr: UnsafeMutableRawPointer?,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+) -> UnsafeMutablePointer<CChar>? {
+    guard let slot = ctkBorrow(slotPtr, as: TKSmartCardSlot.self, errorOut) else { return nil }
     return ctkCString(slot.name)
 }
 
 @_cdecl("ctk_slot_max_input_length")
-public func ctk_slot_max_input_length(_ slotPtr: UnsafeMutableRawPointer?) -> Int {
-    guard let slotPtr else { return 0 }
-    let slot: TKSmartCardSlot = ctkBorrow(slotPtr)
+public func ctk_slot_max_input_length(
+    _ slotPtr: UnsafeMutableRawPointer?,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+) -> Int {
+    guard let slot = ctkBorrow(slotPtr, as: TKSmartCardSlot.self, errorOut) else { return 0 }
     return slot.maxInputLength
 }
 
 @_cdecl("ctk_slot_max_output_length")
-public func ctk_slot_max_output_length(_ slotPtr: UnsafeMutableRawPointer?) -> Int {
-    guard let slotPtr else { return 0 }
-    let slot: TKSmartCardSlot = ctkBorrow(slotPtr)
+public func ctk_slot_max_output_length(
+    _ slotPtr: UnsafeMutableRawPointer?,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+) -> Int {
+    guard let slot = ctkBorrow(slotPtr, as: TKSmartCardSlot.self, errorOut) else { return 0 }
     return slot.maxOutputLength
 }
 
 @_cdecl("ctk_slot_state")
-public func ctk_slot_state(_ slotPtr: UnsafeMutableRawPointer?) -> Int32 {
-    guard let slotPtr else { return Int32(TKSmartCardSlot.State.missing.rawValue) }
-    let slot: TKSmartCardSlot = ctkBorrow(slotPtr)
+public func ctk_slot_state(
+    _ slotPtr: UnsafeMutableRawPointer?,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+) -> Int32 {
+    guard let slot = ctkBorrow(slotPtr, as: TKSmartCardSlot.self, errorOut) else { return CTK_INVALID_ARGUMENT }
     return Int32(slot.state.rawValue)
 }
 
 @_cdecl("ctk_slot_atr_json")
-public func ctk_slot_atr_json(_ slotPtr: UnsafeMutableRawPointer?) -> UnsafeMutablePointer<CChar>? {
-    guard let slotPtr else { return nil }
-    let slot: TKSmartCardSlot = ctkBorrow(slotPtr)
+public func ctk_slot_atr_json(
+    _ slotPtr: UnsafeMutableRawPointer?,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+) -> UnsafeMutablePointer<CChar>? {
+    guard let slot = ctkBorrow(slotPtr, as: TKSmartCardSlot.self, errorOut) else { return nil }
     guard let atr = slot.atr else {
         return nil
     }
@@ -138,9 +151,11 @@ public func ctk_slot_atr_json(_ slotPtr: UnsafeMutableRawPointer?) -> UnsafeMuta
 }
 
 @_cdecl("ctk_slot_make_smart_card")
-public func ctk_slot_make_smart_card(_ slotPtr: UnsafeMutableRawPointer?) -> UnsafeMutableRawPointer? {
-    guard let slotPtr else { return nil }
-    let slot: TKSmartCardSlot = ctkBorrow(slotPtr)
+public func ctk_slot_make_smart_card(
+    _ slotPtr: UnsafeMutableRawPointer?,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+) -> UnsafeMutableRawPointer? {
+    guard let slot = ctkBorrow(slotPtr, as: TKSmartCardSlot.self, errorOut) else { return nil }
     guard let card = slot.makeSmartCard() else {
         return nil
     }
@@ -167,7 +182,7 @@ public func ctk_slot_observe_state(
         return CTK_INVALID_ARGUMENT
     }
 
-    let slot: TKSmartCardSlot = ctkBorrow(slotPtr)
+    guard let slot = ctkBorrow(slotPtr, as: TKSmartCardSlot.self, errorOut) else { return CTK_INVALID_ARGUMENT }
     let observer = CTKSlotStateObserverBox(slot: slot, callback: callback, context: context)
     outObserver.pointee = ctkRetain(observer)
     return CTK_OK

@@ -5,9 +5,9 @@ use std::sync::{Mutex, PoisonError};
 use doom_fish_utils::callback_context::CallbackContext;
 use serde::{Deserialize, Serialize};
 
-use crate::error::{from_swift, CryptoTokenKitError};
+use crate::error::CryptoTokenKitError;
 use crate::ffi;
-use crate::private::{decode_json, decode_optional_json, status_result, to_cstring};
+use crate::private::{checked, decode_json, decode_optional_json, status_result, to_cstring};
 use crate::smart_card::SmartCard;
 use crate::smart_card_atr::SmartCardAtr;
 
@@ -135,13 +135,16 @@ impl SmartCardSlotManager {
 
     /// Wraps the corresponding `TKSmartCardSlotManager` operation.
     pub fn slot_names(&self) -> Result<Vec<String>, CryptoTokenKitError> {
+        let mut json = ptr::null_mut();
         let mut error_ptr = ptr::null_mut();
-        let json = unsafe {
-            ffi::scard_slot_manager::ctk_slot_manager_slot_names_json(self.raw, &raw mut error_ptr)
+        let status = unsafe {
+            ffi::scard_slot_manager::ctk_slot_manager_slot_names_json(
+                self.raw,
+                &raw mut json,
+                &raw mut error_ptr,
+            )
         };
-        if json.is_null() && !error_ptr.is_null() {
-            return Err(from_swift(ffi::status::FRAMEWORK_ERROR, error_ptr));
-        }
+        status_result(status, error_ptr)?;
         if json.is_null() {
             return Ok(Vec::new());
         }
@@ -194,7 +197,8 @@ impl SmartCardSlotManager {
 impl SmartCardSlot {
     /// Wraps the corresponding `TKSmartCardSlot` operation.
     pub fn name(&self) -> Result<String, CryptoTokenKitError> {
-        let ptr = unsafe { ffi::scard_slot_manager::ctk_slot_name(self.raw) };
+        let ptr =
+            checked(|error| unsafe { ffi::scard_slot_manager::ctk_slot_name(self.raw, error) })?;
         if ptr.is_null() {
             return Err(CryptoTokenKitError::FrameworkError(
                 "Swift bridge returned a null slot name".into(),
@@ -203,35 +207,40 @@ impl SmartCardSlot {
         Ok(crate::error::take_owned_c_string(ptr))
     }
 
-    #[must_use]
     /// Wraps the corresponding `TKSmartCardSlot` operation.
-    pub fn max_input_length(&self) -> isize {
-        unsafe { ffi::scard_slot_manager::ctk_slot_max_input_length(self.raw) }
+    pub fn max_input_length(&self) -> Result<isize, CryptoTokenKitError> {
+        checked(|error| unsafe {
+            ffi::scard_slot_manager::ctk_slot_max_input_length(self.raw, error)
+        })
     }
 
-    #[must_use]
     /// Wraps the corresponding `TKSmartCardSlot` operation.
-    pub fn max_output_length(&self) -> isize {
-        unsafe { ffi::scard_slot_manager::ctk_slot_max_output_length(self.raw) }
+    pub fn max_output_length(&self) -> Result<isize, CryptoTokenKitError> {
+        checked(|error| unsafe {
+            ffi::scard_slot_manager::ctk_slot_max_output_length(self.raw, error)
+        })
     }
 
-    #[must_use]
     /// Wraps the corresponding `TKSmartCardSlot` operation.
-    pub fn state(&self) -> SlotState {
-        SlotState::from_raw(unsafe { ffi::scard_slot_manager::ctk_slot_state(self.raw) })
+    pub fn state(&self) -> Result<SlotState, CryptoTokenKitError> {
+        checked(|error| unsafe { ffi::scard_slot_manager::ctk_slot_state(self.raw, error) })
+            .map(SlotState::from_raw)
     }
 
     /// Wraps the corresponding `TKSmartCardSlot` operation.
     pub fn atr(&self) -> Result<Option<SmartCardAtr>, CryptoTokenKitError> {
-        let ptr = unsafe { ffi::scard_slot_manager::ctk_slot_atr_json(self.raw) };
+        let ptr = checked(|error| unsafe {
+            ffi::scard_slot_manager::ctk_slot_atr_json(self.raw, error)
+        })?;
         decode_optional_json(ptr)
     }
 
-    #[must_use]
     /// Creates a value by calling the corresponding `TKSmartCardSlot` operation.
-    pub fn make_smart_card(&self) -> Option<SmartCard> {
-        let raw = unsafe { ffi::scard_slot_manager::ctk_slot_make_smart_card(self.raw) };
-        (!raw.is_null()).then_some(SmartCard::from_raw(raw))
+    pub fn make_smart_card(&self) -> Result<Option<SmartCard>, CryptoTokenKitError> {
+        let raw = checked(|error| unsafe {
+            ffi::scard_slot_manager::ctk_slot_make_smart_card(self.raw, error)
+        })?;
+        Ok((!raw.is_null()).then_some(SmartCard::from_raw(raw)))
     }
 
     /// Starts observing the corresponding `TKSmartCardSlot` state changes.
@@ -289,5 +298,42 @@ impl Drop for SmartCardSlot {
             unsafe { ffi::ctk_object_release(self.raw) };
             self.raw = ptr::null_mut();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{SlotStateCallbacks, SmartCardSlot, SmartCardSlotManager};
+    use crate::private::test_support::{assert_wrong_handle, retained};
+    use crate::smart_card::SmartCard;
+
+    #[test]
+    fn slot_and_manager_handles_of_another_class_are_rejected() {
+        let card = SmartCard::mock("Handle Type Reader").expect("mock card");
+
+        let slot = SmartCardSlot::from_raw(retained(card.raw()));
+        assert_wrong_handle(slot.name());
+        assert_wrong_handle(slot.state());
+        assert_wrong_handle(slot.max_input_length());
+        assert_wrong_handle(slot.atr());
+        assert_wrong_handle(slot.make_smart_card());
+        assert_wrong_handle(slot.observe_state(SlotStateCallbacks::new()));
+
+        let manager = SmartCardSlotManager {
+            raw: retained(card.raw()),
+        };
+        assert_wrong_handle(manager.slot_names());
+        assert_wrong_handle(manager.slot_named("Handle Type Reader"));
+        assert_wrong_handle(manager.get_slot_with_name("Handle Type Reader"));
+
+        let mock_slot = card.slot().expect("mock slot");
+        let card_from_slot = SmartCard::from_raw(retained(mock_slot.raw));
+        assert_wrong_handle(card_from_slot.valid());
+        assert_wrong_handle(card_from_slot.set_cla(0x80));
+        assert_wrong_handle(card_from_slot.context());
+        assert_wrong_handle(card_from_slot.begin_session());
+        assert_wrong_handle(card_from_slot.transmit_request(&[0x00, 0x84, 0x00, 0x00, 0x08]));
+        assert_wrong_handle(card_from_slot.send_ins(0x84, 0x00, 0x00, None, Some(8)));
+        assert_wrong_handle(card_from_slot.end_session());
     }
 }

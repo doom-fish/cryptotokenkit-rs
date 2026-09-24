@@ -58,6 +58,18 @@ pub fn status_result(
     }
 }
 
+pub fn checked<T>(call: impl FnOnce(*mut *mut c_char) -> T) -> Result<T, CryptoTokenKitError> {
+    let mut error = ptr::null_mut();
+    let value = call(&raw mut error);
+    if error.is_null() {
+        Ok(value)
+    } else {
+        Err(CryptoTokenKitError::InvalidArgument(
+            crate::error::take_owned_c_string(error),
+        ))
+    }
+}
+
 #[must_use]
 pub fn clone_cstring_ptr(value: &CString) -> *mut c_char {
     unsafe { strdup(value.as_ptr()) }
@@ -79,4 +91,28 @@ pub fn write_error_ptr(error_out: *mut *mut c_char, message: &str) {
 
 pub fn json_to_ptr<T: Serialize + ?Sized>(value: &T) -> Result<*mut c_char, CryptoTokenKitError> {
     encode_json_cstring(value).map(|cstring| clone_cstring_ptr(&cstring))
+}
+
+#[cfg(test)]
+pub mod test_support {
+    use core::ffi::c_void;
+
+    use crate::error::CryptoTokenKitError;
+
+    unsafe extern "C" {
+        fn objc_retain(object: *mut c_void) -> *mut c_void;
+    }
+
+    pub fn retained(raw: *mut c_void) -> *mut c_void {
+        unsafe { objc_retain(raw) }
+    }
+
+    pub fn assert_wrong_handle<T>(result: Result<T, CryptoTokenKitError>) {
+        match result.err() {
+            Some(CryptoTokenKitError::InvalidArgument(message)) => {
+                assert!(message.contains("is not a"), "{message}");
+            }
+            other => panic!("expected a handle-type error, got {other:?}"),
+        }
+    }
 }

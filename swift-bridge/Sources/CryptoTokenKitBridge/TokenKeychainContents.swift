@@ -153,7 +153,7 @@ public func ctk_token_set_keychain_items_json(
         return CTK_INVALID_ARGUMENT
     }
 
-    let token: TKToken = ctkBorrow(tokenPtr)
+    guard let token = ctkBorrow(tokenPtr, as: TKToken.self, errorOut) else { return CTK_INVALID_ARGUMENT }
     guard #available(macOS 10.15, *) else {
         ctkWriteError(errorOut, "token.configuration requires macOS 10.15 or newer")
         return CTK_FRAMEWORK_ERROR
@@ -169,28 +169,31 @@ public func ctk_token_set_keychain_items_json(
 public func ctk_token_key_for_object_id_json(
     _ tokenPtr: UnsafeMutableRawPointer?,
     _ objectID: UnsafePointer<CChar>?,
+    _ outJSON: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>,
     _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+) -> Int32 {
+    outJSON.pointee = nil
     guard let tokenPtr else {
         ctkWriteError(errorOut, "missing token handle")
-        return nil
+        return CTK_INVALID_ARGUMENT
     }
     guard let objectID else {
         ctkWriteError(errorOut, "missing token object identifier")
-        return nil
+        return CTK_INVALID_ARGUMENT
     }
 
-    let token: TKToken = ctkBorrow(tokenPtr)
+    guard let token = ctkBorrow(tokenPtr, as: TKToken.self, errorOut) else { return CTK_INVALID_ARGUMENT }
     guard #available(macOS 10.15, *) else {
         ctkWriteError(errorOut, "token.configuration requires macOS 10.15 or newer")
-        return nil
+        return CTK_UNSUPPORTED
     }
     do {
         let key = try token.configuration.key(for: String(cString: objectID))
-        return ctkCString(ctkJSONString(ctkTokenKeychainEntryDictionary(key)["value"] ?? [:]))
+        outJSON.pointee = ctkCString(ctkJSONString(ctkTokenKeychainEntryDictionary(key)["value"] ?? [:]))
+        return CTK_OK
     } catch {
         ctkWriteNSError(errorOut, fallback: "failed to resolve token key", error: error)
-        return nil
+        return ctkStatus(from: error)
     }
 }
 
@@ -198,43 +201,49 @@ public func ctk_token_key_for_object_id_json(
 public func ctk_token_certificate_for_object_id_json(
     _ tokenPtr: UnsafeMutableRawPointer?,
     _ objectID: UnsafePointer<CChar>?,
+    _ outJSON: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>,
     _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+) -> Int32 {
+    outJSON.pointee = nil
     guard let tokenPtr else {
         ctkWriteError(errorOut, "missing token handle")
-        return nil
+        return CTK_INVALID_ARGUMENT
     }
     guard let objectID else {
         ctkWriteError(errorOut, "missing token object identifier")
-        return nil
+        return CTK_INVALID_ARGUMENT
     }
 
-    let token: TKToken = ctkBorrow(tokenPtr)
+    guard let token = ctkBorrow(tokenPtr, as: TKToken.self, errorOut) else { return CTK_INVALID_ARGUMENT }
     guard #available(macOS 10.15, *) else {
         ctkWriteError(errorOut, "token.configuration requires macOS 10.15 or newer")
-        return nil
+        return CTK_UNSUPPORTED
     }
     do {
         let certificate = try token.configuration.certificate(for: String(cString: objectID))
-        return ctkCString(ctkJSONString(ctkTokenKeychainEntryDictionary(certificate)["value"] ?? [:]))
+        outJSON.pointee = ctkCString(ctkJSONString(ctkTokenKeychainEntryDictionary(certificate)["value"] ?? [:]))
+        return CTK_OK
     } catch {
         ctkWriteNSError(errorOut, fallback: "failed to resolve token certificate", error: error)
-        return nil
+        return ctkStatus(from: error)
     }
 }
 
 @_cdecl("ctk_token_keychain_contents_items_json")
 public func ctk_token_keychain_contents_items_json(
     _ tokenPtr: UnsafeMutableRawPointer?,
+    _ outJSON: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>,
     _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+) -> Int32 {
+    outJSON.pointee = nil
     guard let tokenPtr else {
         ctkWriteError(errorOut, "missing token handle")
-        return nil
+        return CTK_INVALID_ARGUMENT
     }
-    let token: TKToken = ctkBorrow(tokenPtr)
+    guard let token = ctkBorrow(tokenPtr, as: TKToken.self, errorOut) else { return CTK_INVALID_ARGUMENT }
     guard let keychainContents = token.keychainContents else {
-        return nil
+        return CTK_OK
     }
-    return ctkCString(ctkJSONString(ctkTokenKeychainEntriesDictionary(keychainContents.items)))
+    outJSON.pointee = ctkCString(ctkJSONString(ctkTokenKeychainEntriesDictionary(keychainContents.items)))
+    return CTK_OK
 }

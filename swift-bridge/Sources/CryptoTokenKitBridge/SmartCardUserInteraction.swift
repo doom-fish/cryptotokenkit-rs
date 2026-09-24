@@ -391,17 +391,20 @@ private final class CTKMockSmartCard: TKSmartCard {
 }
 
 @_cdecl("ctk_smart_card_slot")
-public func ctk_smart_card_slot(_ cardPtr: UnsafeMutableRawPointer?) -> UnsafeMutableRawPointer? {
-    guard let cardPtr else { return nil }
-    let card: TKSmartCard = ctkBorrow(cardPtr)
+public func ctk_smart_card_slot(
+    _ cardPtr: UnsafeMutableRawPointer?,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+) -> UnsafeMutableRawPointer? {
+    guard let card = ctkBorrow(cardPtr, as: TKSmartCard.self, errorOut) else { return nil }
     return ctkRetain(card.slot)
 }
 
 @_cdecl("ctk_mock_smart_card_session_depth")
-public func ctk_mock_smart_card_session_depth(_ cardPtr: UnsafeMutableRawPointer?) -> Int {
-    guard let cardPtr, let card = ctkBorrow(cardPtr, as: TKSmartCard.self) as? CTKMockSmartCard else {
-        return -1
-    }
+public func ctk_mock_smart_card_session_depth(
+    _ cardPtr: UnsafeMutableRawPointer?,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+) -> Int {
+    guard let card = ctkBorrow(cardPtr, as: CTKMockSmartCard.self, errorOut) else { return -1 }
     return card.currentSessionDepth
 }
 
@@ -430,7 +433,7 @@ public func ctk_smart_card_user_interaction_set_delegate(
         ctkWriteError(errorOut, "missing smart-card user-interaction delegate callback")
         return CTK_INVALID_ARGUMENT
     }
-    let interaction: TKSmartCardUserInteraction = ctkBorrow(interactionPtr)
+    guard let interaction = ctkBorrow(interactionPtr, as: TKSmartCardUserInteraction.self, errorOut) else { return CTK_INVALID_ARGUMENT }
     let box = CTKSmartCardUserInteractionDelegateBox(callback: callback, context: context)
     interaction.delegate = box
     outDelegate.pointee = ctkRetain(box)
@@ -438,26 +441,30 @@ public func ctk_smart_card_user_interaction_set_delegate(
 }
 
 @_cdecl("ctk_smart_card_user_interaction_clear_delegate")
-public func ctk_smart_card_user_interaction_clear_delegate(_ interactionPtr: UnsafeMutableRawPointer?) {
-    guard let interactionPtr else { return }
-    let interaction: TKSmartCardUserInteraction = ctkBorrow(interactionPtr)
+public func ctk_smart_card_user_interaction_clear_delegate(
+    _ interactionPtr: UnsafeMutableRawPointer?,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+) {
+    guard let interaction = ctkBorrow(interactionPtr, as: TKSmartCardUserInteraction.self, errorOut) else { return }
     interaction.delegate = nil
 }
 
 @_cdecl("ctk_smart_card_user_interaction_has_delegate")
-public func ctk_smart_card_user_interaction_has_delegate(_ interactionPtr: UnsafeMutableRawPointer?) -> Bool {
-    guard let interactionPtr else { return false }
-    let interaction: TKSmartCardUserInteraction = ctkBorrow(interactionPtr)
+public func ctk_smart_card_user_interaction_has_delegate(
+    _ interactionPtr: UnsafeMutableRawPointer?,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+) -> Bool {
+    guard let interaction = ctkBorrow(interactionPtr, as: TKSmartCardUserInteraction.self, errorOut) else { return false }
     return interaction.delegate != nil
 }
 
 @_cdecl("ctk_smart_card_user_interaction_emit_delegate_event")
 public func ctk_smart_card_user_interaction_emit_delegate_event(
     _ interactionPtr: UnsafeMutableRawPointer?,
-    _ event: Int32
+    _ event: Int32,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) {
-    guard let interactionPtr else { return }
-    let interaction: TKSmartCardUserInteraction = ctkBorrow(interactionPtr)
+    guard let interaction = ctkBorrow(interactionPtr, as: TKSmartCardUserInteraction.self, errorOut) else { return }
     guard let delegate = interaction.delegate as? CTKSmartCardUserInteractionDelegateBox else {
         return
     }
@@ -466,39 +473,39 @@ public func ctk_smart_card_user_interaction_emit_delegate_event(
 
 @_cdecl("ctk_smart_card_user_interaction_initial_timeout")
 public func ctk_smart_card_user_interaction_initial_timeout(
-    _ interactionPtr: UnsafeMutableRawPointer?
+    _ interactionPtr: UnsafeMutableRawPointer?,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> Double {
-    guard let interactionPtr else { return 0 }
-    let interaction: TKSmartCardUserInteraction = ctkBorrow(interactionPtr)
+    guard let interaction = ctkBorrow(interactionPtr, as: TKSmartCardUserInteraction.self, errorOut) else { return 0 }
     return interaction.initialTimeout
 }
 
 @_cdecl("ctk_smart_card_user_interaction_set_initial_timeout")
 public func ctk_smart_card_user_interaction_set_initial_timeout(
     _ interactionPtr: UnsafeMutableRawPointer?,
-    _ timeout: Double
+    _ timeout: Double,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) {
-    guard let interactionPtr else { return }
-    let interaction: TKSmartCardUserInteraction = ctkBorrow(interactionPtr)
+    guard let interaction = ctkBorrow(interactionPtr, as: TKSmartCardUserInteraction.self, errorOut) else { return }
     interaction.initialTimeout = timeout
 }
 
 @_cdecl("ctk_smart_card_user_interaction_interaction_timeout")
 public func ctk_smart_card_user_interaction_interaction_timeout(
-    _ interactionPtr: UnsafeMutableRawPointer?
+    _ interactionPtr: UnsafeMutableRawPointer?,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> Double {
-    guard let interactionPtr else { return 0 }
-    let interaction: TKSmartCardUserInteraction = ctkBorrow(interactionPtr)
+    guard let interaction = ctkBorrow(interactionPtr, as: TKSmartCardUserInteraction.self, errorOut) else { return 0 }
     return interaction.interactionTimeout
 }
 
 @_cdecl("ctk_smart_card_user_interaction_set_interaction_timeout")
 public func ctk_smart_card_user_interaction_set_interaction_timeout(
     _ interactionPtr: UnsafeMutableRawPointer?,
-    _ timeout: Double
+    _ timeout: Double,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) {
-    guard let interactionPtr else { return }
-    let interaction: TKSmartCardUserInteraction = ctkBorrow(interactionPtr)
+    guard let interaction = ctkBorrow(interactionPtr, as: TKSmartCardUserInteraction.self, errorOut) else { return }
     interaction.interactionTimeout = timeout
 }
 
@@ -511,7 +518,7 @@ public func ctk_smart_card_user_interaction_run(
         ctkWriteError(errorOut, "missing smart-card user-interaction handle")
         return CTK_INVALID_ARGUMENT
     }
-    let interaction: TKSmartCardUserInteraction = ctkBorrow(interactionPtr)
+    guard let interaction = ctkBorrow(interactionPtr, as: TKSmartCardUserInteraction.self, errorOut) else { return CTK_INVALID_ARGUMENT }
     let configured = interaction.initialTimeout + interaction.interactionTimeout
     let limit = configured.isFinite && configured > 25 ? min(configured, 3600) + 5 : 30
     let pending = CTKPendingReply<(Bool, Error?)>()
@@ -532,19 +539,19 @@ public func ctk_smart_card_user_interaction_run(
 
 @_cdecl("ctk_smart_card_user_interaction_cancel")
 public func ctk_smart_card_user_interaction_cancel(
-    _ interactionPtr: UnsafeMutableRawPointer?
+    _ interactionPtr: UnsafeMutableRawPointer?,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> Bool {
-    guard let interactionPtr else { return false }
-    let interaction: TKSmartCardUserInteraction = ctkBorrow(interactionPtr)
+    guard let interaction = ctkBorrow(interactionPtr, as: TKSmartCardUserInteraction.self, errorOut) else { return false }
     return interaction.cancel()
 }
 
 @_cdecl("ctk_smart_card_pin_interaction_completion")
 public func ctk_smart_card_pin_interaction_completion(
-    _ interactionPtr: UnsafeMutableRawPointer?
+    _ interactionPtr: UnsafeMutableRawPointer?,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> UInt32 {
-    guard let interactionPtr else { return 0 }
-    let interaction: TKSmartCardUserInteractionForPINOperation = ctkBorrow(interactionPtr)
+    guard let interaction = ctkBorrow(interactionPtr, as: TKSmartCardUserInteractionForPINOperation.self, errorOut) else { return 0 }
     if let state = ctkMockPinInteractionState(for: interaction) {
         return state.completion
     }
@@ -554,20 +561,20 @@ public func ctk_smart_card_pin_interaction_completion(
 @_cdecl("ctk_smart_card_pin_interaction_set_completion")
 public func ctk_smart_card_pin_interaction_set_completion(
     _ interactionPtr: UnsafeMutableRawPointer?,
-    _ completion: UInt32
+    _ completion: UInt32,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) {
-    guard let interactionPtr else { return }
-    let interaction: TKSmartCardUserInteractionForPINOperation = ctkBorrow(interactionPtr)
+    guard let interaction = ctkBorrow(interactionPtr, as: TKSmartCardUserInteractionForPINOperation.self, errorOut) else { return }
     ctkSetMockPinInteractionState(for: interaction) { $0.completion = completion }
     interaction.pinCompletion = TKSmartCardUserInteractionForPINOperation.Completion(rawValue: UInt(completion))
 }
 
 @_cdecl("ctk_smart_card_pin_interaction_message_indices_json")
 public func ctk_smart_card_pin_interaction_message_indices_json(
-    _ interactionPtr: UnsafeMutableRawPointer?
+    _ interactionPtr: UnsafeMutableRawPointer?,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> UnsafeMutablePointer<CChar>? {
-    guard let interactionPtr else { return nil }
-    let interaction: TKSmartCardUserInteractionForPINOperation = ctkBorrow(interactionPtr)
+    guard let interaction = ctkBorrow(interactionPtr, as: TKSmartCardUserInteractionForPINOperation.self, errorOut) else { return nil }
     let messageIndices = ctkMockPinInteractionState(for: interaction)?.messageIndices ?? interaction.pinMessageIndices
     guard let messageIndices else {
         return nil
@@ -586,7 +593,7 @@ public func ctk_smart_card_pin_interaction_set_message_indices_json(
         ctkWriteError(errorOut, "missing smart-card PIN interaction handle")
         return CTK_INVALID_ARGUMENT
     }
-    let interaction: TKSmartCardUserInteractionForPINOperation = ctkBorrow(interactionPtr)
+    guard let interaction = ctkBorrow(interactionPtr, as: TKSmartCardUserInteractionForPINOperation.self, errorOut) else { return CTK_INVALID_ARGUMENT }
     if hasJSON {
         guard let json,
               let indices = ctkJSONValue(from: json) as? [NSNumber] else {
@@ -604,10 +611,10 @@ public func ctk_smart_card_pin_interaction_set_message_indices_json(
 
 @_cdecl("ctk_smart_card_pin_interaction_locale_identifier")
 public func ctk_smart_card_pin_interaction_locale_identifier(
-    _ interactionPtr: UnsafeMutableRawPointer?
+    _ interactionPtr: UnsafeMutableRawPointer?,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> UnsafeMutablePointer<CChar>? {
-    guard let interactionPtr else { return nil }
-    let interaction: TKSmartCardUserInteractionForPINOperation = ctkBorrow(interactionPtr)
+    guard let interaction = ctkBorrow(interactionPtr, as: TKSmartCardUserInteractionForPINOperation.self, errorOut) else { return nil }
     let identifier = ctkMockPinInteractionState(for: interaction)?.localeIdentifier
         ?? interaction.locale?.identifier
         ?? Locale.current.identifier
@@ -625,7 +632,7 @@ public func ctk_smart_card_pin_interaction_set_locale_identifier(
         ctkWriteError(errorOut, "missing smart-card PIN interaction handle")
         return CTK_INVALID_ARGUMENT
     }
-    let interaction: TKSmartCardUserInteractionForPINOperation = ctkBorrow(interactionPtr)
+    guard let interaction = ctkBorrow(interactionPtr, as: TKSmartCardUserInteractionForPINOperation.self, errorOut) else { return CTK_INVALID_ARGUMENT }
     let locale = hasIdentifier && identifier != nil
         ? Locale(identifier: String(cString: identifier!))
         : Locale.current
@@ -636,19 +643,19 @@ public func ctk_smart_card_pin_interaction_set_locale_identifier(
 
 @_cdecl("ctk_smart_card_pin_interaction_result_sw")
 public func ctk_smart_card_pin_interaction_result_sw(
-    _ interactionPtr: UnsafeMutableRawPointer?
+    _ interactionPtr: UnsafeMutableRawPointer?,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> UInt16 {
-    guard let interactionPtr else { return 0 }
-    let interaction: TKSmartCardUserInteractionForPINOperation = ctkBorrow(interactionPtr)
+    guard let interaction = ctkBorrow(interactionPtr, as: TKSmartCardUserInteractionForPINOperation.self, errorOut) else { return 0 }
     return ctkMockPinInteractionState(for: interaction)?.resultSW ?? interaction.resultSW
 }
 
 @_cdecl("ctk_smart_card_pin_interaction_result_data_json")
 public func ctk_smart_card_pin_interaction_result_data_json(
-    _ interactionPtr: UnsafeMutableRawPointer?
+    _ interactionPtr: UnsafeMutableRawPointer?,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> UnsafeMutablePointer<CChar>? {
-    guard let interactionPtr else { return nil }
-    let interaction: TKSmartCardUserInteractionForPINOperation = ctkBorrow(interactionPtr)
+    guard let interaction = ctkBorrow(interactionPtr, as: TKSmartCardUserInteractionForPINOperation.self, errorOut) else { return nil }
     let resultData = ctkMockPinInteractionState(for: interaction)?.resultData ?? interaction.resultData
     guard let resultData else {
         return nil
@@ -658,10 +665,10 @@ public func ctk_smart_card_pin_interaction_result_data_json(
 
 @_cdecl("ctk_smart_card_pin_change_interaction_confirmation")
 public func ctk_smart_card_pin_change_interaction_confirmation(
-    _ interactionPtr: UnsafeMutableRawPointer?
+    _ interactionPtr: UnsafeMutableRawPointer?,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> UInt32 {
-    guard let interactionPtr else { return 0 }
-    let interaction: TKSmartCardUserInteractionForSecurePINChange = ctkBorrow(interactionPtr)
+    guard let interaction = ctkBorrow(interactionPtr, as: TKSmartCardUserInteractionForSecurePINChange.self, errorOut) else { return 0 }
     return ctkMockPinInteractionState(for: interaction)?.confirmation
         ?? UInt32(interaction.pinConfirmation.rawValue)
 }
@@ -669,10 +676,10 @@ public func ctk_smart_card_pin_change_interaction_confirmation(
 @_cdecl("ctk_smart_card_pin_change_interaction_set_confirmation")
 public func ctk_smart_card_pin_change_interaction_set_confirmation(
     _ interactionPtr: UnsafeMutableRawPointer?,
-    _ confirmation: UInt32
+    _ confirmation: UInt32,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) {
-    guard let interactionPtr else { return }
-    let interaction: TKSmartCardUserInteractionForSecurePINChange = ctkBorrow(interactionPtr)
+    guard let interaction = ctkBorrow(interactionPtr, as: TKSmartCardUserInteractionForSecurePINChange.self, errorOut) else { return }
     ctkSetMockPinInteractionState(for: interaction) { $0.confirmation = confirmation }
     interaction.pinConfirmation = TKSmartCardUserInteractionForSecurePINChange.Confirmation(rawValue: UInt(confirmation))
 }
@@ -684,19 +691,21 @@ public func ctk_smart_card_user_interaction_for_secure_pin_verification(
     _ apduPtr: UnsafePointer<UInt8>?,
     _ apduLen: Int,
     _ pinByteOffset: Int,
+    _ outInteraction: UnsafeMutablePointer<UnsafeMutableRawPointer?>,
     _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutableRawPointer? {
+) -> Int32 {
+    outInteraction.pointee = nil
     guard let cardPtr else {
         ctkWriteError(errorOut, "missing smart-card handle")
-        return nil
+        return CTK_INVALID_ARGUMENT
     }
     guard let pinFormatJSON,
           let pinFormatValue = ctkJSONValue(from: pinFormatJSON) as? [String: Any],
           let apduPtr else {
         ctkWriteError(errorOut, "invalid secure-PIN verification arguments")
-        return nil
+        return CTK_INVALID_ARGUMENT
     }
-    let card: TKSmartCard = ctkBorrow(cardPtr)
+    guard let card = ctkBorrow(cardPtr, as: TKSmartCard.self, errorOut) else { return CTK_INVALID_ARGUMENT }
     let pinFormat = TKSmartCardPINFormat()
     ctkApplySmartCardPINFormat(pinFormatValue, to: pinFormat)
     let interaction = card.userInteractionForSecurePINVerification(
@@ -704,7 +713,8 @@ public func ctk_smart_card_user_interaction_for_secure_pin_verification(
         apdu: Data(bytes: apduPtr, count: apduLen),
         pinByteOffset: pinByteOffset
     )
-    return interaction.map(ctkRetain)
+    outInteraction.pointee = interaction.map(ctkRetain)
+    return CTK_OK
 }
 
 @_cdecl("ctk_smart_card_user_interaction_for_secure_pin_change")
@@ -715,19 +725,21 @@ public func ctk_smart_card_user_interaction_for_secure_pin_change(
     _ apduLen: Int,
     _ currentPINByteOffset: Int,
     _ newPINByteOffset: Int,
+    _ outInteraction: UnsafeMutablePointer<UnsafeMutableRawPointer?>,
     _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutableRawPointer? {
+) -> Int32 {
+    outInteraction.pointee = nil
     guard let cardPtr else {
         ctkWriteError(errorOut, "missing smart-card handle")
-        return nil
+        return CTK_INVALID_ARGUMENT
     }
     guard let pinFormatJSON,
           let pinFormatValue = ctkJSONValue(from: pinFormatJSON) as? [String: Any],
           let apduPtr else {
         ctkWriteError(errorOut, "invalid secure-PIN change arguments")
-        return nil
+        return CTK_INVALID_ARGUMENT
     }
-    let card: TKSmartCard = ctkBorrow(cardPtr)
+    guard let card = ctkBorrow(cardPtr, as: TKSmartCard.self, errorOut) else { return CTK_INVALID_ARGUMENT }
     let pinFormat = TKSmartCardPINFormat()
     ctkApplySmartCardPINFormat(pinFormatValue, to: pinFormat)
     let interaction = card.userInteractionForSecurePINChange(
@@ -736,5 +748,6 @@ public func ctk_smart_card_user_interaction_for_secure_pin_change(
         currentPINByteOffset: currentPINByteOffset,
         newPINByteOffset: newPINByteOffset
     )
-    return interaction.map(ctkRetain)
+    outInteraction.pointee = interaction.map(ctkRetain)
+    return CTK_OK
 }

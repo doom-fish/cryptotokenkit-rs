@@ -20,14 +20,17 @@ public func ctk_token_watcher_new() -> UnsafeMutableRawPointer? {
 @_cdecl("ctk_token_watcher_token_ids_json")
 public func ctk_token_watcher_token_ids_json(
     _ watcherPtr: UnsafeMutableRawPointer?,
+    _ outJSON: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>,
     _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+) -> Int32 {
+    outJSON.pointee = nil
     guard let watcherPtr else {
         ctkWriteError(errorOut, "missing token watcher handle")
-        return nil
+        return CTK_INVALID_ARGUMENT
     }
-    let watcher: TKTokenWatcher = ctkBorrow(watcherPtr)
-    return ctkCString(ctkJSONString(watcher.tokenIDs))
+    guard let watcher = ctkBorrow(watcherPtr, as: TKTokenWatcher.self, errorOut) else { return CTK_INVALID_ARGUMENT }
+    outJSON.pointee = ctkCString(ctkJSONString(watcher.tokenIDs))
+    return CTK_OK
 }
 
 @_cdecl("ctk_token_watcher_set_insertion_handler")
@@ -47,7 +50,7 @@ public func ctk_token_watcher_set_insertion_handler(
         ctkWriteError(errorOut, "missing token watcher insertion callback")
         return CTK_INVALID_ARGUMENT
     }
-    let watcher: TKTokenWatcher = ctkBorrow(watcherPtr)
+    guard let watcher = ctkBorrow(watcherPtr, as: TKTokenWatcher.self, errorOut) else { return CTK_INVALID_ARGUMENT }
     watcher.setInsertionHandler { tokenID in
         tokenID.withCString { callback(context.pointer, $0) }
     }
@@ -76,7 +79,7 @@ public func ctk_token_watcher_add_removal_handler(
         ctkWriteError(errorOut, "missing token watcher removal callback")
         return CTK_INVALID_ARGUMENT
     }
-    let watcher: TKTokenWatcher = ctkBorrow(watcherPtr)
+    guard let watcher = ctkBorrow(watcherPtr, as: TKTokenWatcher.self, errorOut) else { return CTK_INVALID_ARGUMENT }
     watcher.addRemovalHandler({ tokenID in
         tokenID.withCString { callback(context.pointer, $0) }
     }, forTokenID: String(cString: tokenID))
@@ -87,23 +90,26 @@ public func ctk_token_watcher_add_removal_handler(
 public func ctk_token_watcher_token_info_json(
     _ watcherPtr: UnsafeMutableRawPointer?,
     _ tokenID: UnsafePointer<CChar>?,
+    _ outJSON: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>,
     _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+) -> Int32 {
+    outJSON.pointee = nil
     guard let watcherPtr else {
         ctkWriteError(errorOut, "missing token watcher handle")
-        return nil
+        return CTK_INVALID_ARGUMENT
     }
     guard let tokenID else {
         ctkWriteError(errorOut, "missing token identifier")
-        return nil
+        return CTK_INVALID_ARGUMENT
     }
-    let watcher: TKTokenWatcher = ctkBorrow(watcherPtr)
+    guard let watcher = ctkBorrow(watcherPtr, as: TKTokenWatcher.self, errorOut) else { return CTK_INVALID_ARGUMENT }
     guard #available(macOS 12.0, *) else {
         ctkWriteError(errorOut, "tokenInfo(forTokenID:) requires macOS 12.0 or newer")
-        return nil
+        return CTK_UNSUPPORTED
     }
     guard let info = watcher.tokenInfo(forTokenID: String(cString: tokenID)) else {
-        return nil
+        return CTK_OK
     }
-    return ctkCString(ctkJSONString(ctkTokenWatcherTokenInfoDictionary(info)))
+    outJSON.pointee = ctkCString(ctkJSONString(ctkTokenWatcherTokenInfoDictionary(info)))
+    return CTK_OK
 }

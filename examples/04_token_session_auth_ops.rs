@@ -6,7 +6,7 @@ use cryptotokenkit::{
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let driver = TokenDriver::new();
     let token = Token::new(&driver, "com.example.cryptotokenkit.session")?;
-    let session = TokenSession::new(&token);
+    let session = TokenSession::new(&token)?;
 
     match session.token_instance_id() {
         Ok(instance_id) => println!("session token: {instance_id}"),

@@ -3,115 +3,132 @@ import Foundation
 
 @_cdecl("ctk_smart_card_slot_name")
 public func ctk_smart_card_slot_name(
-    _ cardPtr: UnsafeMutableRawPointer?
+    _ cardPtr: UnsafeMutableRawPointer?,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> UnsafeMutablePointer<CChar>? {
-    guard let cardPtr else { return nil }
-    let card: TKSmartCard = ctkBorrow(cardPtr)
+    guard let card = ctkBorrow(cardPtr, as: TKSmartCard.self, errorOut) else { return nil }
     return ctkCString(card.slot.name)
 }
 
 @_cdecl("ctk_smart_card_valid")
-public func ctk_smart_card_valid(_ cardPtr: UnsafeMutableRawPointer?) -> Bool {
-    guard let cardPtr else { return false }
-    let card: TKSmartCard = ctkBorrow(cardPtr)
+public func ctk_smart_card_valid(
+    _ cardPtr: UnsafeMutableRawPointer?,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+) -> Bool {
+    guard let card = ctkBorrow(cardPtr, as: TKSmartCard.self, errorOut) else { return false }
     return card.isValid
 }
 
 @_cdecl("ctk_smart_card_allowed_protocols")
-public func ctk_smart_card_allowed_protocols(_ cardPtr: UnsafeMutableRawPointer?) -> UInt32 {
-    guard let cardPtr else { return 0 }
-    let card: TKSmartCard = ctkBorrow(cardPtr)
+public func ctk_smart_card_allowed_protocols(
+    _ cardPtr: UnsafeMutableRawPointer?,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+) -> UInt32 {
+    guard let card = ctkBorrow(cardPtr, as: TKSmartCard.self, errorOut) else { return 0 }
     return UInt32(card.allowedProtocols.rawValue)
 }
 
 @_cdecl("ctk_smart_card_set_allowed_protocols")
 public func ctk_smart_card_set_allowed_protocols(
     _ cardPtr: UnsafeMutableRawPointer?,
-    _ protocols: UInt32
+    _ protocols: UInt32,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) {
-    guard let cardPtr else { return }
-    let card: TKSmartCard = ctkBorrow(cardPtr)
+    guard let card = ctkBorrow(cardPtr, as: TKSmartCard.self, errorOut) else { return }
     card.allowedProtocols = TKSmartCardProtocol(rawValue: UInt(protocols))
 }
 
 @_cdecl("ctk_smart_card_current_protocol")
-public func ctk_smart_card_current_protocol(_ cardPtr: UnsafeMutableRawPointer?) -> UInt32 {
-    guard let cardPtr else { return 0 }
-    let card: TKSmartCard = ctkBorrow(cardPtr)
+public func ctk_smart_card_current_protocol(
+    _ cardPtr: UnsafeMutableRawPointer?,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+) -> UInt32 {
+    guard let card = ctkBorrow(cardPtr, as: TKSmartCard.self, errorOut) else { return 0 }
     return UInt32(card.currentProtocol.rawValue)
 }
 
 @_cdecl("ctk_smart_card_sensitive")
-public func ctk_smart_card_sensitive(_ cardPtr: UnsafeMutableRawPointer?) -> Bool {
-    guard let cardPtr else { return false }
-    let card: TKSmartCard = ctkBorrow(cardPtr)
+public func ctk_smart_card_sensitive(
+    _ cardPtr: UnsafeMutableRawPointer?,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+) -> Bool {
+    guard let card = ctkBorrow(cardPtr, as: TKSmartCard.self, errorOut) else { return false }
     return card.isSensitive
 }
 
 @_cdecl("ctk_smart_card_set_sensitive")
 public func ctk_smart_card_set_sensitive(
     _ cardPtr: UnsafeMutableRawPointer?,
-    _ sensitive: Bool
+    _ sensitive: Bool,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) {
-    guard let cardPtr else { return }
-    let card: TKSmartCard = ctkBorrow(cardPtr)
+    guard let card = ctkBorrow(cardPtr, as: TKSmartCard.self, errorOut) else { return }
     card.isSensitive = sensitive
 }
 
 @_cdecl("ctk_smart_card_cla")
-public func ctk_smart_card_cla(_ cardPtr: UnsafeMutableRawPointer?) -> UInt8 {
-    guard let cardPtr else { return 0 }
-    let card: TKSmartCard = ctkBorrow(cardPtr)
+public func ctk_smart_card_cla(
+    _ cardPtr: UnsafeMutableRawPointer?,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+) -> UInt8 {
+    guard let card = ctkBorrow(cardPtr, as: TKSmartCard.self, errorOut) else { return 0 }
     return card.cla
 }
 
 @_cdecl("ctk_smart_card_set_cla")
-public func ctk_smart_card_set_cla(_ cardPtr: UnsafeMutableRawPointer?, _ cla: UInt8) {
-    guard let cardPtr else { return }
-    let card: TKSmartCard = ctkBorrow(cardPtr)
+public func ctk_smart_card_set_cla(
+    _ cardPtr: UnsafeMutableRawPointer?,
+    _ cla: UInt8,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+) {
+    guard let card = ctkBorrow(cardPtr, as: TKSmartCard.self, errorOut) else { return }
     card.cla = cla
 }
 
 @_cdecl("ctk_smart_card_use_extended_length")
-public func ctk_smart_card_use_extended_length(_ cardPtr: UnsafeMutableRawPointer?) -> Bool {
-    guard let cardPtr else { return false }
-    let card: TKSmartCard = ctkBorrow(cardPtr)
+public func ctk_smart_card_use_extended_length(
+    _ cardPtr: UnsafeMutableRawPointer?,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+) -> Bool {
+    guard let card = ctkBorrow(cardPtr, as: TKSmartCard.self, errorOut) else { return false }
     return card.useExtendedLength
 }
 
 @_cdecl("ctk_smart_card_set_use_extended_length")
 public func ctk_smart_card_set_use_extended_length(
     _ cardPtr: UnsafeMutableRawPointer?,
-    _ enabled: Bool
+    _ enabled: Bool,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) {
-    guard let cardPtr else { return }
-    let card: TKSmartCard = ctkBorrow(cardPtr)
+    guard let card = ctkBorrow(cardPtr, as: TKSmartCard.self, errorOut) else { return }
     card.useExtendedLength = enabled
 }
 
 @_cdecl("ctk_smart_card_use_command_chaining")
-public func ctk_smart_card_use_command_chaining(_ cardPtr: UnsafeMutableRawPointer?) -> Bool {
-    guard let cardPtr else { return false }
-    let card: TKSmartCard = ctkBorrow(cardPtr)
+public func ctk_smart_card_use_command_chaining(
+    _ cardPtr: UnsafeMutableRawPointer?,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+) -> Bool {
+    guard let card = ctkBorrow(cardPtr, as: TKSmartCard.self, errorOut) else { return false }
     return card.useCommandChaining
 }
 
 @_cdecl("ctk_smart_card_set_use_command_chaining")
 public func ctk_smart_card_set_use_command_chaining(
     _ cardPtr: UnsafeMutableRawPointer?,
-    _ enabled: Bool
+    _ enabled: Bool,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) {
-    guard let cardPtr else { return }
-    let card: TKSmartCard = ctkBorrow(cardPtr)
+    guard let card = ctkBorrow(cardPtr, as: TKSmartCard.self, errorOut) else { return }
     card.useCommandChaining = enabled
 }
 
 @_cdecl("ctk_smart_card_context_json")
 public func ctk_smart_card_context_json(
-    _ cardPtr: UnsafeMutableRawPointer?
+    _ cardPtr: UnsafeMutableRawPointer?,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> UnsafeMutablePointer<CChar>? {
-    guard let cardPtr else { return nil }
-    let card: TKSmartCard = ctkBorrow(cardPtr)
+    guard let card = ctkBorrow(cardPtr, as: TKSmartCard.self, errorOut) else { return nil }
     if let context = card.context as? CTKRustContextBox {
         return ctkCString(context.json)
     }
@@ -132,7 +149,7 @@ public func ctk_smart_card_set_context_json(
         ctkWriteError(errorOut, "missing smart-card handle")
         return CTK_INVALID_ARGUMENT
     }
-    let card: TKSmartCard = ctkBorrow(cardPtr)
+    guard let card = ctkBorrow(cardPtr, as: TKSmartCard.self, errorOut) else { return CTK_INVALID_ARGUMENT }
     if hasJSON {
         guard let json else {
             ctkWriteError(errorOut, "missing smart-card context JSON")
@@ -155,7 +172,7 @@ public func ctk_smart_card_begin_session(
         return CTK_INVALID_ARGUMENT
     }
 
-    let card: TKSmartCard = ctkBorrow(cardPtr)
+    guard let card = ctkBorrow(cardPtr, as: TKSmartCard.self, errorOut) else { return CTK_INVALID_ARGUMENT }
     let pending = CTKPendingReply<(Bool, Error?)>()
     card.beginSession { success, error in
         if !pending.complete((success, error)), success {
@@ -191,7 +208,7 @@ public func ctk_smart_card_transmit_request_json(
         return CTK_INVALID_ARGUMENT
     }
 
-    let card: TKSmartCard = ctkBorrow(cardPtr)
+    guard let card = ctkBorrow(cardPtr, as: TKSmartCard.self, errorOut) else { return CTK_INVALID_ARGUMENT }
     let request = Data(bytes: requestPtr, count: requestLen)
     let pending = CTKPendingReply<(Data?, Error?)>()
     card.transmit(request) { response, error in
@@ -210,9 +227,11 @@ public func ctk_smart_card_transmit_request_json(
 }
 
 @_cdecl("ctk_smart_card_end_session")
-public func ctk_smart_card_end_session(_ cardPtr: UnsafeMutableRawPointer?) {
-    guard let cardPtr else { return }
-    let card: TKSmartCard = ctkBorrow(cardPtr)
+public func ctk_smart_card_end_session(
+    _ cardPtr: UnsafeMutableRawPointer?,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+) {
+    guard let card = ctkBorrow(cardPtr, as: TKSmartCard.self, errorOut) else { return }
     card.endSession()
 }
 
@@ -240,7 +259,7 @@ public func ctk_smart_card_send_ins(
         return CTK_INVALID_ARGUMENT
     }
 
-    let card: TKSmartCard = ctkBorrow(cardPtr)
+    guard let card = ctkBorrow(cardPtr, as: TKSmartCard.self, errorOut) else { return CTK_INVALID_ARGUMENT }
     let requestData = dataPtr.map { Data(bytes: $0, count: dataLen) }
     let expectedLength: Int? = hasLE ? le : nil
 

@@ -1,14 +1,24 @@
 use core::ffi::{c_char, c_void};
 
 unsafe extern "C" {
-    pub fn ctk_token_session_new(token: *mut c_void) -> *mut c_void;
-    pub fn ctk_smart_card_token_session_new(token: *mut c_void) -> *mut c_void;
-    pub fn ctk_token_session_token_instance_id(session: *mut c_void) -> *mut c_char;
-    pub fn ctk_smart_card_token_session_smart_card(session: *mut c_void) -> *mut c_void;
-    pub fn ctk_smart_card_token_session_get_smart_card(
+    pub fn ctk_token_session_new(token: *mut c_void, error_out: *mut *mut c_char) -> *mut c_void;
+    pub fn ctk_smart_card_token_session_new(
+        token: *mut c_void,
+        error_out: *mut *mut c_char,
+    ) -> *mut c_void;
+    pub fn ctk_token_session_token_instance_id(
+        session: *mut c_void,
+        error_out: *mut *mut c_char,
+    ) -> *mut c_char;
+    pub fn ctk_smart_card_token_session_smart_card(
         session: *mut c_void,
         error_out: *mut *mut c_char,
     ) -> *mut c_void;
+    pub fn ctk_smart_card_token_session_get_smart_card(
+        session: *mut c_void,
+        out_smart_card: *mut *mut c_void,
+        error_out: *mut *mut c_char,
+    ) -> i32;
 
     pub fn ctk_token_auth_operation_new() -> *mut c_void;
     pub fn ctk_token_auth_operation_finish(
@@ -32,7 +42,10 @@ unsafe extern "C" {
     ) -> i32;
 
     pub fn ctk_token_smart_card_pin_auth_operation_new() -> *mut c_void;
-    pub fn ctk_token_smart_card_pin_auth_operation_json(operation: *mut c_void) -> *mut c_char;
+    pub fn ctk_token_smart_card_pin_auth_operation_json(
+        operation: *mut c_void,
+        error_out: *mut *mut c_char,
+    ) -> *mut c_char;
     pub fn ctk_token_smart_card_pin_auth_operation_update_json(
         operation: *mut c_void,
         json: *const c_char,

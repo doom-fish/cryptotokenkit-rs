@@ -22,7 +22,7 @@ impl TokenSessionDelegate for FailingDelegate {
 fn sign_error_through_delegate(sign_error: fn() -> CryptoTokenKitError) -> CryptoTokenKitError {
     let driver = TokenDriver::new();
     let token = Token::new(&driver, "com.example.cryptotokenkit.error-codes").expect("token");
-    let session = TokenSession::new(&token);
+    let session = TokenSession::new(&token).expect("session");
     let _handle = session
         .set_delegate(FailingDelegate { sign_error })
         .expect("delegate");

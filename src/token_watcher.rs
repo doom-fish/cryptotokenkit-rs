@@ -6,7 +6,7 @@ use std::sync::{Mutex, PoisonError};
 use doom_fish_utils::callback_context::CallbackContext;
 use serde::{Deserialize, Serialize};
 
-use crate::error::{from_swift, CryptoTokenKitError};
+use crate::error::CryptoTokenKitError;
 use crate::ffi;
 use crate::private::{decode_json, decode_optional_json, status_result, to_cstring};
 
@@ -63,13 +63,16 @@ impl TokenWatcher {
 
     /// Returns the corresponding `TKTokenWatcher` value.
     pub fn token_ids(&self) -> Result<Vec<String>, CryptoTokenKitError> {
+        let mut ptr = ptr::null_mut();
         let mut error_ptr = ptr::null_mut();
-        let ptr = unsafe {
-            ffi::token_watcher::ctk_token_watcher_token_ids_json(self.raw, &raw mut error_ptr)
+        let status = unsafe {
+            ffi::token_watcher::ctk_token_watcher_token_ids_json(
+                self.raw,
+                &raw mut ptr,
+                &raw mut error_ptr,
+            )
         };
-        if ptr.is_null() && !error_ptr.is_null() {
-            return Err(from_swift(ffi::status::FRAMEWORK_ERROR, error_ptr));
-        }
+        status_result(status, error_ptr)?;
         if ptr.is_null() {
             return Ok(Vec::new());
         }
@@ -129,17 +132,17 @@ impl TokenWatcher {
         token_id: &str,
     ) -> Result<Option<TokenWatcherTokenInfo>, CryptoTokenKitError> {
         let token_id = to_cstring(token_id)?;
+        let mut ptr = ptr::null_mut();
         let mut error_ptr = ptr::null_mut();
-        let ptr = unsafe {
+        let status = unsafe {
             ffi::token_watcher::ctk_token_watcher_token_info_json(
                 self.raw,
                 token_id.as_ptr(),
+                &raw mut ptr,
                 &raw mut error_ptr,
             )
         };
-        if ptr.is_null() && !error_ptr.is_null() {
-            return Err(from_swift(ffi::status::FRAMEWORK_ERROR, error_ptr));
-        }
+        status_result(status, error_ptr)?;
         decode_optional_json(ptr)
     }
 }
@@ -159,5 +162,28 @@ impl Drop for TokenWatcher {
             unsafe { ffi::ctk_object_release(self.raw) };
             self.raw = ptr::null_mut();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::TokenWatcher;
+    use crate::private::test_support::{assert_wrong_handle, retained};
+    use crate::token_driver::TokenDriver;
+
+    #[test]
+    fn watcher_handles_of_another_class_are_rejected() {
+        let driver = TokenDriver::new();
+        let mut watcher = TokenWatcher {
+            raw: retained(driver.raw()),
+            insertion_context: None,
+            removal_contexts: Vec::new(),
+        };
+        assert_wrong_handle(watcher.token_ids());
+        assert_wrong_handle(watcher.token_info("com.example.token"));
+        assert_wrong_handle(watcher.set_insertion_handler(|_| {}));
+        assert_wrong_handle(watcher.add_removal_handler("com.example.token", |_| {}));
+        assert!(watcher.insertion_context.is_none());
+        assert!(watcher.removal_contexts.is_empty());
     }
 }

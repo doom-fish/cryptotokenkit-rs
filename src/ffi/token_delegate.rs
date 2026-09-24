@@ -90,9 +90,15 @@ unsafe extern "C" {
         out_delegate: *mut *mut c_void,
         error_out: *mut *mut c_char,
     ) -> i32;
-    pub fn ctk_token_session_clear_delegate(session: *mut c_void);
-    pub fn ctk_token_session_has_delegate(session: *mut c_void) -> bool;
-    pub fn ctk_token_session_token(session: *mut c_void) -> *mut c_void;
+    pub fn ctk_token_session_clear_delegate(session: *mut c_void, error_out: *mut *mut c_char);
+    pub fn ctk_token_session_has_delegate(
+        session: *mut c_void,
+        error_out: *mut *mut c_char,
+    ) -> bool;
+    pub fn ctk_token_session_token(
+        session: *mut c_void,
+        error_out: *mut *mut c_char,
+    ) -> *mut c_void;
     pub fn ctk_token_session_invoke_delegate_begin_auth(
         session: *mut c_void,
         operation: i32,
@@ -106,6 +112,7 @@ unsafe extern "C" {
         object_id: *const c_char,
         base_algorithm: *const c_char,
         supported_algorithms_json: *const c_char,
+        error_out: *mut *mut c_char,
     ) -> bool;
     pub fn ctk_token_session_invoke_delegate_sign(
         session: *mut c_void,
@@ -153,15 +160,19 @@ unsafe extern "C" {
         out_delegate: *mut *mut c_void,
         error_out: *mut *mut c_char,
     ) -> i32;
-    pub fn ctk_token_clear_delegate(token: *mut c_void);
-    pub fn ctk_token_has_delegate(token: *mut c_void) -> bool;
-    pub fn ctk_token_token_driver(token: *mut c_void) -> *mut c_void;
+    pub fn ctk_token_clear_delegate(token: *mut c_void, error_out: *mut *mut c_char);
+    pub fn ctk_token_has_delegate(token: *mut c_void, error_out: *mut *mut c_char) -> bool;
+    pub fn ctk_token_token_driver(token: *mut c_void, error_out: *mut *mut c_char) -> *mut c_void;
     pub fn ctk_token_invoke_delegate_create_session(
         token: *mut c_void,
         out_session: *mut *mut c_void,
         error_out: *mut *mut c_char,
     ) -> i32;
-    pub fn ctk_token_invoke_delegate_terminate_session(token: *mut c_void, session: *mut c_void);
+    pub fn ctk_token_invoke_delegate_terminate_session(
+        token: *mut c_void,
+        session: *mut c_void,
+        error_out: *mut *mut c_char,
+    );
 
     pub fn ctk_token_driver_set_delegate(
         driver: *mut c_void,
@@ -172,8 +183,8 @@ unsafe extern "C" {
         out_delegate: *mut *mut c_void,
         error_out: *mut *mut c_char,
     ) -> i32;
-    pub fn ctk_token_driver_clear_delegate(driver: *mut c_void);
-    pub fn ctk_token_driver_has_delegate(driver: *mut c_void) -> bool;
+    pub fn ctk_token_driver_clear_delegate(driver: *mut c_void, error_out: *mut *mut c_char);
+    pub fn ctk_token_driver_has_delegate(driver: *mut c_void, error_out: *mut *mut c_char) -> bool;
     pub fn ctk_token_driver_add_token_configuration_json(
         class_id: *const c_char,
         instance_id: *const c_char,
@@ -194,6 +205,7 @@ unsafe extern "C" {
     pub fn ctk_token_driver_invoke_delegate_terminate_token(
         driver: *mut c_void,
         token: *mut c_void,
+        error_out: *mut *mut c_char,
     );
 
     pub fn ctk_smart_card_token_driver_set_delegate(
@@ -217,19 +229,29 @@ unsafe extern "C" {
     pub fn ctk_smart_card_token_driver_invoke_delegate_terminate_token(
         driver: *mut c_void,
         token: *mut c_void,
+        error_out: *mut *mut c_char,
     );
 
     pub fn ctk_token_key_algorithm_is_algorithm(
         algorithm: *mut c_void,
         algorithm_name: *const c_char,
+        error_out: *mut *mut c_char,
     ) -> bool;
     pub fn ctk_token_key_algorithm_supports_algorithm(
         algorithm: *mut c_void,
         algorithm_name: *const c_char,
+        error_out: *mut *mut c_char,
     ) -> bool;
-    pub fn ctk_token_key_exchange_parameters_requested_size(parameters: *mut c_void) -> isize;
+    pub fn ctk_token_key_exchange_parameters_requested_size(
+        parameters: *mut c_void,
+        error_out: *mut *mut c_char,
+    ) -> isize;
     pub fn ctk_token_key_exchange_parameters_shared_info_json(
         parameters: *mut c_void,
+        error_out: *mut *mut c_char,
     ) -> *mut c_char;
-    pub fn ctk_token_auth_operation_kind(operation: *mut c_void) -> i32;
+    pub fn ctk_token_auth_operation_kind(
+        operation: *mut c_void,
+        error_out: *mut *mut c_char,
+    ) -> i32;
 }

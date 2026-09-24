@@ -85,11 +85,11 @@ public typealias CTKSmartCardTokenDriverTerminateTokenCallback = @convention(c) 
     UnsafeMutableRawPointer?
 ) -> Void
 
-private func ctkConsumeRetained<T: AnyObject>(_ ptr: UnsafeMutableRawPointer?) -> T? {
-    guard let ptr else {
-        return nil
+private func ctkConsumeRetained<T: AnyObject>(_ ptr: UnsafeMutableRawPointer, as type: T.Type) throws -> T {
+    guard let object = Unmanaged<AnyObject>.fromOpaque(ptr).takeRetainedValue() as? T else {
+        throw ctkNSError(status: CTK_INVALID_ARGUMENT, message: "the Rust delegate returned a handle that is not a \(type)")
     }
-    return Unmanaged<T>.fromOpaque(ptr).takeRetainedValue()
+    return object
 }
 
 private func ctkConfigurationJSONString(_ configuration: [String: Any]) -> String {
@@ -248,7 +248,7 @@ private final class CTKTokenSessionDelegateBox: NSObject, TKTokenSessionDelegate
         ) else {
             throw error ?? ctkNSError(status: CTK_FRAMEWORK_ERROR, message: "token-session delegate returned no auth operation")
         }
-        return ctkConsumeRetained(rawOperation) ?? TKTokenAuthOperation()
+        return try ctkConsumeRetained(rawOperation, as: TKTokenAuthOperation.self)
     }
 
     func tokenSession(
@@ -352,7 +352,7 @@ private final class CTKTokenDelegateBox: NSObject, TKTokenDelegate {
         guard let rawSession = invokeCreateSession(token: token, errorOut: &error) else {
             throw error ?? ctkNSError(status: CTK_FRAMEWORK_ERROR, message: "token delegate returned no session")
         }
-        return ctkConsumeRetained(rawSession) ?? TKTokenSession(token: token)
+        return try ctkConsumeRetained(rawSession, as: TKTokenSession.self)
     }
 
     func token(_ token: TKToken, terminateSession session: TKTokenSession) {
@@ -414,7 +414,7 @@ private final class CTKTokenDriverDelegateBox: NSObject, TKTokenDriverDelegate {
         ) else {
             throw error ?? ctkNSError(status: CTK_FRAMEWORK_ERROR, message: "token-driver delegate returned no token")
         }
-        return ctkConsumeRetained(rawToken) ?? TKToken(tokenDriver: driver, instanceID: configuration.instanceID)
+        return try ctkConsumeRetained(rawToken, as: TKToken.self)
     }
 
     func tokenDriver(_ driver: TKTokenDriver, terminateToken token: TKToken) {
@@ -495,12 +495,7 @@ private final class CTKSmartCardTokenDriverDelegateBox: NSObject, TKSmartCardTok
         ) else {
             throw error ?? ctkNSError(status: CTK_FRAMEWORK_ERROR, message: "smart-card token-driver delegate returned no token")
         }
-        return ctkConsumeRetained(rawToken) ?? TKSmartCardToken(
-            smartCard: smartCard,
-            aid: AID,
-            instanceID: "ctk.mock.smartcard-token",
-            tokenDriver: driver
-        )
+        return try ctkConsumeRetained(rawToken, as: TKSmartCardToken.self)
     }
 
     func tokenDriver(_ driver: TKTokenDriver, terminateToken token: TKToken) {
@@ -535,7 +530,7 @@ public func ctk_token_session_set_delegate(
         ctkWriteError(errorOut, "missing token-session delegate callbacks")
         return CTK_INVALID_ARGUMENT
     }
-    let session: TKTokenSession = ctkBorrow(sessionPtr)
+    guard let session = ctkBorrow(sessionPtr, as: TKTokenSession.self, errorOut) else { return CTK_INVALID_ARGUMENT }
     let box = CTKTokenSessionDelegateBox(
         beginAuthCallback: beginAuthCallback,
         supportsCallback: supportsCallback,
@@ -550,23 +545,29 @@ public func ctk_token_session_set_delegate(
 }
 
 @_cdecl("ctk_token_session_clear_delegate")
-public func ctk_token_session_clear_delegate(_ sessionPtr: UnsafeMutableRawPointer?) {
-    guard let sessionPtr else { return }
-    let session: TKTokenSession = ctkBorrow(sessionPtr)
+public func ctk_token_session_clear_delegate(
+    _ sessionPtr: UnsafeMutableRawPointer?,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+) {
+    guard let session = ctkBorrow(sessionPtr, as: TKTokenSession.self, errorOut) else { return }
     session.delegate = nil
 }
 
 @_cdecl("ctk_token_session_has_delegate")
-public func ctk_token_session_has_delegate(_ sessionPtr: UnsafeMutableRawPointer?) -> Bool {
-    guard let sessionPtr else { return false }
-    let session: TKTokenSession = ctkBorrow(sessionPtr)
+public func ctk_token_session_has_delegate(
+    _ sessionPtr: UnsafeMutableRawPointer?,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+) -> Bool {
+    guard let session = ctkBorrow(sessionPtr, as: TKTokenSession.self, errorOut) else { return false }
     return session.delegate != nil
 }
 
 @_cdecl("ctk_token_session_token")
-public func ctk_token_session_token(_ sessionPtr: UnsafeMutableRawPointer?) -> UnsafeMutableRawPointer? {
-    guard let sessionPtr else { return nil }
-    let session: TKTokenSession = ctkBorrow(sessionPtr)
+public func ctk_token_session_token(
+    _ sessionPtr: UnsafeMutableRawPointer?,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+) -> UnsafeMutableRawPointer? {
+    guard let session = ctkBorrow(sessionPtr, as: TKTokenSession.self, errorOut) else { return nil }
     return ctkRetain(session.token)
 }
 
@@ -587,7 +588,7 @@ public func ctk_token_session_invoke_delegate_begin_auth(
         ctkWriteError(errorOut, "missing token-session constraint JSON")
         return CTK_INVALID_ARGUMENT
     }
-    let session: TKTokenSession = ctkBorrow(sessionPtr)
+    guard let session = ctkBorrow(sessionPtr, as: TKTokenSession.self, errorOut) else { return CTK_INVALID_ARGUMENT }
     guard let delegate = session.delegate as? CTKTokenSessionDelegateBox else {
         ctkWriteError(errorOut, "token-session delegate is not managed by the Rust bridge")
         return CTK_FRAMEWORK_ERROR
@@ -613,16 +614,18 @@ public func ctk_token_session_invoke_delegate_supports(
     _ operation: Int32,
     _ objectID: UnsafePointer<CChar>?,
     _ baseAlgorithm: UnsafePointer<CChar>?,
-    _ supportedAlgorithmsJSON: UnsafePointer<CChar>?
+    _ supportedAlgorithmsJSON: UnsafePointer<CChar>?,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> Bool {
-    guard let sessionPtr, let objectID,
+    guard let session = ctkBorrow(sessionPtr, as: TKTokenSession.self, errorOut) else { return false }
+    guard let objectID,
           let algorithm = ctkMockTokenKeyAlgorithm(
               baseAlgorithm: baseAlgorithm,
               supportedAlgorithmsJSON: supportedAlgorithmsJSON
           ) else {
+        ctkWriteError(errorOut, "invalid token-session delegate invocation")
         return false
     }
-    let session: TKTokenSession = ctkBorrow(sessionPtr)
     guard let delegate = session.delegate as? CTKTokenSessionDelegateBox else {
         return false
     }
@@ -655,7 +658,7 @@ private func ctkInvokeTokenSessionDataDelegate(
         ctkWriteError(errorOut, "invalid token-session delegate invocation")
         return CTK_INVALID_ARGUMENT
     }
-    let session: TKTokenSession = ctkBorrow(sessionPtr)
+    guard let session = ctkBorrow(sessionPtr, as: TKTokenSession.self, errorOut) else { return CTK_INVALID_ARGUMENT }
     guard let delegate = session.delegate as? CTKTokenSessionDelegateBox else {
         ctkWriteError(errorOut, "token-session delegate is not managed by the Rust bridge")
         return CTK_FRAMEWORK_ERROR
@@ -764,7 +767,7 @@ public func ctk_token_session_invoke_delegate_key_exchange(
         ctkWriteError(errorOut, "invalid token-session delegate key-exchange invocation")
         return CTK_INVALID_ARGUMENT
     }
-    let session: TKTokenSession = ctkBorrow(sessionPtr)
+    guard let session = ctkBorrow(sessionPtr, as: TKTokenSession.self, errorOut) else { return CTK_INVALID_ARGUMENT }
     guard let delegate = session.delegate as? CTKTokenSessionDelegateBox else {
         ctkWriteError(errorOut, "token-session delegate is not managed by the Rust bridge")
         return CTK_FRAMEWORK_ERROR
@@ -811,7 +814,7 @@ public func ctk_token_set_delegate(
         ctkWriteError(errorOut, "missing token delegate callbacks")
         return CTK_INVALID_ARGUMENT
     }
-    let token: TKToken = ctkBorrow(tokenPtr)
+    guard let token = ctkBorrow(tokenPtr, as: TKToken.self, errorOut) else { return CTK_INVALID_ARGUMENT }
     let box = CTKTokenDelegateBox(
         createSessionCallback: createSessionCallback,
         terminateSessionCallback: terminateSessionCallback,
@@ -823,23 +826,29 @@ public func ctk_token_set_delegate(
 }
 
 @_cdecl("ctk_token_clear_delegate")
-public func ctk_token_clear_delegate(_ tokenPtr: UnsafeMutableRawPointer?) {
-    guard let tokenPtr else { return }
-    let token: TKToken = ctkBorrow(tokenPtr)
+public func ctk_token_clear_delegate(
+    _ tokenPtr: UnsafeMutableRawPointer?,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+) {
+    guard let token = ctkBorrow(tokenPtr, as: TKToken.self, errorOut) else { return }
     token.delegate = nil
 }
 
 @_cdecl("ctk_token_has_delegate")
-public func ctk_token_has_delegate(_ tokenPtr: UnsafeMutableRawPointer?) -> Bool {
-    guard let tokenPtr else { return false }
-    let token: TKToken = ctkBorrow(tokenPtr)
+public func ctk_token_has_delegate(
+    _ tokenPtr: UnsafeMutableRawPointer?,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+) -> Bool {
+    guard let token = ctkBorrow(tokenPtr, as: TKToken.self, errorOut) else { return false }
     return token.delegate != nil
 }
 
 @_cdecl("ctk_token_token_driver")
-public func ctk_token_token_driver(_ tokenPtr: UnsafeMutableRawPointer?) -> UnsafeMutableRawPointer? {
-    guard let tokenPtr else { return nil }
-    let token: TKToken = ctkBorrow(tokenPtr)
+public func ctk_token_token_driver(
+    _ tokenPtr: UnsafeMutableRawPointer?,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+) -> UnsafeMutableRawPointer? {
+    guard let token = ctkBorrow(tokenPtr, as: TKToken.self, errorOut) else { return nil }
     return ctkRetain(token.tokenDriver)
 }
 
@@ -854,7 +863,7 @@ public func ctk_token_invoke_delegate_create_session(
         ctkWriteError(errorOut, "missing token handle")
         return CTK_INVALID_ARGUMENT
     }
-    let token: TKToken = ctkBorrow(tokenPtr)
+    guard let token = ctkBorrow(tokenPtr, as: TKToken.self, errorOut) else { return CTK_INVALID_ARGUMENT }
     guard let delegate = token.delegate as? CTKTokenDelegateBox else {
         ctkWriteError(errorOut, "token delegate is not managed by the Rust bridge")
         return CTK_FRAMEWORK_ERROR
@@ -871,11 +880,11 @@ public func ctk_token_invoke_delegate_create_session(
 @_cdecl("ctk_token_invoke_delegate_terminate_session")
 public func ctk_token_invoke_delegate_terminate_session(
     _ tokenPtr: UnsafeMutableRawPointer?,
-    _ sessionPtr: UnsafeMutableRawPointer?
+    _ sessionPtr: UnsafeMutableRawPointer?,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) {
-    guard let tokenPtr, let sessionPtr else { return }
-    let token: TKToken = ctkBorrow(tokenPtr)
-    let session: TKTokenSession = ctkBorrow(sessionPtr)
+    guard let token = ctkBorrow(tokenPtr, as: TKToken.self, errorOut) else { return }
+    guard let session = ctkBorrow(sessionPtr, as: TKTokenSession.self, errorOut) else { return }
     guard let delegate = token.delegate as? CTKTokenDelegateBox else {
         return
     }
@@ -902,7 +911,7 @@ public func ctk_token_driver_set_delegate(
         ctkWriteError(errorOut, "missing token-driver delegate callbacks")
         return CTK_INVALID_ARGUMENT
     }
-    let driver: TKTokenDriver = ctkBorrow(driverPtr)
+    guard let driver = ctkBorrow(driverPtr, as: TKTokenDriver.self, errorOut) else { return CTK_INVALID_ARGUMENT }
     let box = CTKTokenDriverDelegateBox(
         createTokenCallback: createTokenCallback,
         terminateTokenCallback: terminateTokenCallback,
@@ -914,16 +923,20 @@ public func ctk_token_driver_set_delegate(
 }
 
 @_cdecl("ctk_token_driver_clear_delegate")
-public func ctk_token_driver_clear_delegate(_ driverPtr: UnsafeMutableRawPointer?) {
-    guard let driverPtr else { return }
-    let driver: TKTokenDriver = ctkBorrow(driverPtr)
+public func ctk_token_driver_clear_delegate(
+    _ driverPtr: UnsafeMutableRawPointer?,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+) {
+    guard let driver = ctkBorrow(driverPtr, as: TKTokenDriver.self, errorOut) else { return }
     driver.delegate = nil
 }
 
 @_cdecl("ctk_token_driver_has_delegate")
-public func ctk_token_driver_has_delegate(_ driverPtr: UnsafeMutableRawPointer?) -> Bool {
-    guard let driverPtr else { return false }
-    let driver: TKTokenDriver = ctkBorrow(driverPtr)
+public func ctk_token_driver_has_delegate(
+    _ driverPtr: UnsafeMutableRawPointer?,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+) -> Bool {
+    guard let driver = ctkBorrow(driverPtr, as: TKTokenDriver.self, errorOut) else { return false }
     return driver.delegate != nil
 }
 
@@ -939,7 +952,7 @@ public func ctk_token_driver_invoke_delegate_token_for_configuration_json(
         ctkWriteError(errorOut, "missing token-driver delegate invocation arguments")
         return CTK_INVALID_ARGUMENT
     }
-    let driver: TKTokenDriver = ctkBorrow(driverPtr)
+    guard let driver = ctkBorrow(driverPtr, as: TKTokenDriver.self, errorOut) else { return CTK_INVALID_ARGUMENT }
     guard let delegate = driver.delegate as? CTKTokenDriverDelegateBox else {
         ctkWriteError(errorOut, "token-driver delegate is not managed by the Rust bridge")
         return CTK_FRAMEWORK_ERROR
@@ -960,11 +973,11 @@ public func ctk_token_driver_invoke_delegate_token_for_configuration_json(
 @_cdecl("ctk_token_driver_invoke_delegate_terminate_token")
 public func ctk_token_driver_invoke_delegate_terminate_token(
     _ driverPtr: UnsafeMutableRawPointer?,
-    _ tokenPtr: UnsafeMutableRawPointer?
+    _ tokenPtr: UnsafeMutableRawPointer?,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) {
-    guard let driverPtr, let tokenPtr else { return }
-    let driver: TKTokenDriver = ctkBorrow(driverPtr)
-    let token: TKToken = ctkBorrow(tokenPtr)
+    guard let driver = ctkBorrow(driverPtr, as: TKTokenDriver.self, errorOut) else { return }
+    guard let token = ctkBorrow(tokenPtr, as: TKToken.self, errorOut) else { return }
     guard let delegate = driver.delegate as? CTKTokenDriverDelegateBox else {
         return
     }
@@ -991,7 +1004,7 @@ public func ctk_smart_card_token_driver_set_delegate(
         ctkWriteError(errorOut, "missing smart-card token-driver delegate callbacks")
         return CTK_INVALID_ARGUMENT
     }
-    let driver: TKSmartCardTokenDriver = ctkBorrow(driverPtr)
+    guard let driver = ctkBorrow(driverPtr, as: TKSmartCardTokenDriver.self, errorOut) else { return CTK_INVALID_ARGUMENT }
     let box = CTKSmartCardTokenDriverDelegateBox(
         createTokenCallback: createTokenCallback,
         terminateTokenCallback: terminateTokenCallback,
@@ -1017,8 +1030,8 @@ public func ctk_smart_card_token_driver_invoke_delegate_create_token(
         ctkWriteError(errorOut, "missing smart-card token-driver delegate invocation arguments")
         return CTK_INVALID_ARGUMENT
     }
-    let driver: TKSmartCardTokenDriver = ctkBorrow(driverPtr)
-    let smartCard: TKSmartCard = ctkBorrow(smartCardPtr)
+    guard let driver = ctkBorrow(driverPtr, as: TKSmartCardTokenDriver.self, errorOut) else { return CTK_INVALID_ARGUMENT }
+    guard let smartCard = ctkBorrow(smartCardPtr, as: TKSmartCard.self, errorOut) else { return CTK_INVALID_ARGUMENT }
     guard let delegate = driver.delegate as? CTKSmartCardTokenDriverDelegateBox else {
         ctkWriteError(errorOut, "smart-card token-driver delegate is not managed by the Rust bridge")
         return CTK_FRAMEWORK_ERROR
@@ -1041,11 +1054,11 @@ public func ctk_smart_card_token_driver_invoke_delegate_create_token(
 @_cdecl("ctk_smart_card_token_driver_invoke_delegate_terminate_token")
 public func ctk_smart_card_token_driver_invoke_delegate_terminate_token(
     _ driverPtr: UnsafeMutableRawPointer?,
-    _ tokenPtr: UnsafeMutableRawPointer?
+    _ tokenPtr: UnsafeMutableRawPointer?,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) {
-    guard let driverPtr, let tokenPtr else { return }
-    let driver: TKTokenDriver = ctkBorrow(driverPtr)
-    let token: TKToken = ctkBorrow(tokenPtr)
+    guard let driver = ctkBorrow(driverPtr, as: TKTokenDriver.self, errorOut) else { return }
+    guard let token = ctkBorrow(tokenPtr, as: TKToken.self, errorOut) else { return }
     guard let delegate = driver.delegate as? CTKSmartCardTokenDriverDelegateBox else {
         return
     }
@@ -1055,38 +1068,46 @@ public func ctk_smart_card_token_driver_invoke_delegate_terminate_token(
 @_cdecl("ctk_token_key_algorithm_is_algorithm")
 public func ctk_token_key_algorithm_is_algorithm(
     _ algorithmPtr: UnsafeMutableRawPointer?,
-    _ algorithmName: UnsafePointer<CChar>?
+    _ algorithmName: UnsafePointer<CChar>?,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> Bool {
-    guard let algorithmPtr, let algorithmName else { return false }
-    let algorithm: TKTokenKeyAlgorithm = ctkBorrow(algorithmPtr)
+    guard let algorithm = ctkBorrow(algorithmPtr, as: TKTokenKeyAlgorithm.self, errorOut) else { return false }
+    guard let algorithmName else {
+        ctkWriteError(errorOut, "missing algorithm name")
+        return false
+    }
     return algorithm.isAlgorithm(ctkSecKeyAlgorithm(from: String(cString: algorithmName)))
 }
 
 @_cdecl("ctk_token_key_algorithm_supports_algorithm")
 public func ctk_token_key_algorithm_supports_algorithm(
     _ algorithmPtr: UnsafeMutableRawPointer?,
-    _ algorithmName: UnsafePointer<CChar>?
+    _ algorithmName: UnsafePointer<CChar>?,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> Bool {
-    guard let algorithmPtr, let algorithmName else { return false }
-    let algorithm: TKTokenKeyAlgorithm = ctkBorrow(algorithmPtr)
+    guard let algorithm = ctkBorrow(algorithmPtr, as: TKTokenKeyAlgorithm.self, errorOut) else { return false }
+    guard let algorithmName else {
+        ctkWriteError(errorOut, "missing algorithm name")
+        return false
+    }
     return algorithm.supportsAlgorithm(ctkSecKeyAlgorithm(from: String(cString: algorithmName)))
 }
 
 @_cdecl("ctk_token_key_exchange_parameters_requested_size")
 public func ctk_token_key_exchange_parameters_requested_size(
-    _ parametersPtr: UnsafeMutableRawPointer?
+    _ parametersPtr: UnsafeMutableRawPointer?,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> Int {
-    guard let parametersPtr else { return 0 }
-    let parameters: TKTokenKeyExchangeParameters = ctkBorrow(parametersPtr)
+    guard let parameters = ctkBorrow(parametersPtr, as: TKTokenKeyExchangeParameters.self, errorOut) else { return 0 }
     return parameters.requestedSize
 }
 
 @_cdecl("ctk_token_key_exchange_parameters_shared_info_json")
 public func ctk_token_key_exchange_parameters_shared_info_json(
-    _ parametersPtr: UnsafeMutableRawPointer?
+    _ parametersPtr: UnsafeMutableRawPointer?,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> UnsafeMutablePointer<CChar>? {
-    guard let parametersPtr else { return nil }
-    let parameters: TKTokenKeyExchangeParameters = ctkBorrow(parametersPtr)
+    guard let parameters = ctkBorrow(parametersPtr, as: TKTokenKeyExchangeParameters.self, errorOut) else { return nil }
     guard let sharedInfo = parameters.sharedInfo else {
         return nil
     }
@@ -1094,9 +1115,11 @@ public func ctk_token_key_exchange_parameters_shared_info_json(
 }
 
 @_cdecl("ctk_token_auth_operation_kind")
-public func ctk_token_auth_operation_kind(_ operationPtr: UnsafeMutableRawPointer?) -> Int32 {
-    guard let operationPtr else { return 0 }
-    let operation: TKTokenAuthOperation = ctkBorrow(operationPtr)
+public func ctk_token_auth_operation_kind(
+    _ operationPtr: UnsafeMutableRawPointer?,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+) -> Int32 {
+    guard let operation = ctkBorrow(operationPtr, as: TKTokenAuthOperation.self, errorOut) else { return CTK_INVALID_ARGUMENT }
     if operation is TKTokenSmartCardPINAuthOperation {
         return 2
     }

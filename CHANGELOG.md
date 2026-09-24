@@ -32,6 +32,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A framework call that failed without an `NSError` (for example
   `TokenSmartCardPinAuthOperation::finish` without a smart card) was reported
   as success. It is now `CryptoTokenKitError::FrameworkError`.
+- The Swift bridge unboxed every handle without checking its class, so a
+  handle of the wrong type was reinterpreted as the expected one. Safe code
+  could trigger this: `DerefMut` let `mem::swap` move a secure-PIN
+  verification into a `SmartCardUserInteractionForSecurePinChange`, and
+  `set_pin_confirmation` then aborted the process. Every bridge function now
+  checks the class (`as?`) and a mismatch is
+  `CryptoTokenKitError::InvalidArgument`. Objects returned by Rust delegates
+  are checked too, and a mismatch fails the callback instead of being replaced
+  with a newly made default session, token or auth operation.
 
 ### Fixed
 
@@ -56,6 +65,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Token::set_configuration_data` stored their values in process-local
   dictionaries (the configuration data keyed by object address, so a later
   token could read another token's data). They now use the framework.
+- Token and smart-card-token constructors, token configuration, key and
+  certificate lookups, `keychain_contents_items`, `get_smart_card`, the
+  token-watcher queries, `slot_names` and the secure-PIN interaction
+  constructors report their failures with a status. A macOS version gate is
+  `Unsupported` and a `TKError` (for example `ObjectNotFound`) keeps its code
+  in `framework_code()`; before, all of these were `FrameworkError`.
 
 ### Changed
 
@@ -71,6 +86,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   bridge variants (`InvalidArgument`, `FrameworkError`, `TimedOut`,
   `Unsupported`) instead of values that collided with `TKErrorCode`.
 - **Breaking:** `TKErrorCode` is `#[non_exhaustive]`.
+- **Breaking:** Accessors that could not report a bridge failure return
+  `Result`: `SmartCard::valid`, `allowed_protocols`, `set_allowed_protocols`,
+  `current_protocol`, `sensitive`, `set_sensitive`, `cla`, `set_cla`,
+  `use_extended_length`, `set_use_extended_length`, `use_command_chaining`,
+  `set_use_command_chaining` and `end_session`; `SmartCardSlot::max_input_length`,
+  `max_output_length`, `state` and `make_smart_card`;
+  `SmartCardUserInteraction::has_delegate`, `clear_delegate`,
+  `simulate_delegate_event`, `initial_timeout`, `set_initial_timeout`,
+  `interaction_timeout`, `set_interaction_timeout` and `cancel`;
+  `SmartCardUserInteractionForPinOperation::pin_completion`,
+  `set_pin_completion` and `result_status_word`;
+  `SmartCardUserInteractionForSecurePinChange::pin_confirmation` and
+  `set_pin_confirmation`; `SmartCardTokenSession::smart_card`;
+  `TokenKeyExchangeParameters::requested_size`; `has_delegate` and
+  `clear_delegate` on `TokenSession`, `Token`, `TokenDriver` and
+  `SmartCardTokenDriver`; `Token::invoke_delegate_terminate_session`; and
+  `invoke_delegate_terminate_token` on both drivers.
+- **Breaking:** `TokenSession::new` and `SmartCardTokenSession::new` return
+  `Result<Self, CryptoTokenKitError>` instead of panicking.
+- **Breaking:** `SmartCardUserInteractionForPinOperation`,
+  `SmartCardUserInteractionForSecurePinVerification` and
+  `SmartCardUserInteractionForSecurePinChange` no longer implement `DerefMut`;
+  `Deref` remains, and every method takes `&self`.
+- **Breaking:** The failures listed under Fixed that used to be
+  `FrameworkError` are now `InvalidArgument`, `Unsupported` or
+  `Unknown { code }` carrying the `TKError` code.
 - `doom-fish-utils` is now a regular dependency (`>=0.4.1, <0.5`); the `async`
   feature only enables its `futures-stream` support.
 - New dependency `zeroize` (`>=1.6, <1.9`; 1.9 needs Rust 1.85).

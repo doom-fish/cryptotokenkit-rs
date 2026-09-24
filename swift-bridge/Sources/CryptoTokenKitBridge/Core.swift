@@ -14,8 +14,20 @@ public func ctkRetain(_ object: some AnyObject) -> UnsafeMutableRawPointer {
 }
 
 @inline(__always)
-public func ctkBorrow<T: AnyObject>(_ ptr: UnsafeMutableRawPointer, as _: T.Type = T.self) -> T {
-    Unmanaged<T>.fromOpaque(ptr).takeUnretainedValue()
+public func ctkBorrow<T: AnyObject>(
+    _ ptr: UnsafeMutableRawPointer?,
+    as type: T.Type,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+) -> T? {
+    guard let ptr else {
+        ctkWriteError(errorOut, "missing \(type) handle")
+        return nil
+    }
+    guard let object = Unmanaged<AnyObject>.fromOpaque(ptr).takeUnretainedValue() as? T else {
+        ctkWriteError(errorOut, "handle is not a \(type)")
+        return nil
+    }
+    return object
 }
 
 public typealias CTKContextRelease = @convention(c) (UnsafeMutableRawPointer?) -> Void

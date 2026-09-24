@@ -5,20 +5,23 @@ import Foundation
 public func ctk_token_new(
     _ driverPtr: UnsafeMutableRawPointer?,
     _ instanceID: UnsafePointer<CChar>?,
+    _ outToken: UnsafeMutablePointer<UnsafeMutableRawPointer?>,
     _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutableRawPointer? {
+) -> Int32 {
+    outToken.pointee = nil
     guard let driverPtr else {
         ctkWriteError(errorOut, "missing token driver handle")
-        return nil
+        return CTK_INVALID_ARGUMENT
     }
     guard let instanceID else {
         ctkWriteError(errorOut, "missing token instance identifier")
-        return nil
+        return CTK_INVALID_ARGUMENT
     }
 
-    let driver: TKTokenDriver = ctkBorrow(driverPtr)
+    guard let driver = ctkBorrow(driverPtr, as: TKTokenDriver.self, errorOut) else { return CTK_INVALID_ARGUMENT }
     let token = TKToken(tokenDriver: driver, instanceID: String(cString: instanceID))
-    return ctkRetain(token)
+    outToken.pointee = ctkRetain(token)
+    return CTK_OK
 }
 
 @_cdecl("ctk_smart_card_token_new")
@@ -29,23 +32,25 @@ public func ctk_smart_card_token_new(
     _ hasAID: Bool,
     _ instanceID: UnsafePointer<CChar>?,
     _ driverPtr: UnsafeMutableRawPointer?,
+    _ outToken: UnsafeMutablePointer<UnsafeMutableRawPointer?>,
     _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutableRawPointer? {
+) -> Int32 {
+    outToken.pointee = nil
     guard let smartCardPtr else {
         ctkWriteError(errorOut, "missing smart-card handle")
-        return nil
+        return CTK_INVALID_ARGUMENT
     }
     guard let instanceID else {
         ctkWriteError(errorOut, "missing smart-card token instance identifier")
-        return nil
+        return CTK_INVALID_ARGUMENT
     }
     guard let driverPtr else {
         ctkWriteError(errorOut, "missing smart-card token driver handle")
-        return nil
+        return CTK_INVALID_ARGUMENT
     }
 
-    let smartCard: TKSmartCard = ctkBorrow(smartCardPtr)
-    let driver: TKSmartCardTokenDriver = ctkBorrow(driverPtr)
+    guard let smartCard = ctkBorrow(smartCardPtr, as: TKSmartCard.self, errorOut) else { return CTK_INVALID_ARGUMENT }
+    guard let driver = ctkBorrow(driverPtr, as: TKSmartCardTokenDriver.self, errorOut) else { return CTK_INVALID_ARGUMENT }
     let aidData = hasAID ? aidPtr.map { Data(bytes: $0, count: aidLen) } : nil
     let token = TKSmartCardToken(
         smartCard: smartCard,
@@ -53,15 +58,16 @@ public func ctk_smart_card_token_new(
         instanceID: String(cString: instanceID),
         tokenDriver: driver
     )
-    return ctkRetain(token)
+    outToken.pointee = ctkRetain(token)
+    return CTK_OK
 }
 
 @_cdecl("ctk_smart_card_token_aid_json")
 public func ctk_smart_card_token_aid_json(
-    _ tokenPtr: UnsafeMutableRawPointer?
+    _ tokenPtr: UnsafeMutableRawPointer?,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> UnsafeMutablePointer<CChar>? {
-    guard let tokenPtr else { return nil }
-    let token: TKSmartCardToken = ctkBorrow(tokenPtr)
+    guard let token = ctkBorrow(tokenPtr, as: TKSmartCardToken.self, errorOut) else { return nil }
     guard let aid = token.aid else {
         return nil
     }
@@ -71,22 +77,25 @@ public func ctk_smart_card_token_aid_json(
 @_cdecl("ctk_token_configuration_json")
 public func ctk_token_configuration_json(
     _ tokenPtr: UnsafeMutableRawPointer?,
+    _ outJSON: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>,
     _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutablePointer<CChar>? {
+) -> Int32 {
+    outJSON.pointee = nil
     guard let tokenPtr else {
         ctkWriteError(errorOut, "missing token handle")
-        return nil
+        return CTK_INVALID_ARGUMENT
     }
-    let token: TKToken = ctkBorrow(tokenPtr)
+    guard let token = ctkBorrow(tokenPtr, as: TKToken.self, errorOut) else { return CTK_INVALID_ARGUMENT }
     guard #available(macOS 10.15, *) else {
         ctkWriteError(errorOut, "token.configuration requires macOS 10.15 or newer")
-        return nil
+        return CTK_UNSUPPORTED
     }
     let dictionary = ctkTokenConfigurationDictionary(
         token.configuration,
         keychainContents: token.keychainContents
     )
-    return ctkCString(ctkJSONString(dictionary))
+    outJSON.pointee = ctkCString(ctkJSONString(dictionary))
+    return CTK_OK
 }
 
 @_cdecl("ctk_token_set_configuration_data")
@@ -101,7 +110,7 @@ public func ctk_token_set_configuration_data(
         ctkWriteError(errorOut, "missing token handle")
         return CTK_INVALID_ARGUMENT
     }
-    let token: TKToken = ctkBorrow(tokenPtr)
+    guard let token = ctkBorrow(tokenPtr, as: TKToken.self, errorOut) else { return CTK_INVALID_ARGUMENT }
     guard #available(macOS 10.15, *) else {
         ctkWriteError(errorOut, "token.configuration requires macOS 10.15 or newer")
         return CTK_UNSUPPORTED

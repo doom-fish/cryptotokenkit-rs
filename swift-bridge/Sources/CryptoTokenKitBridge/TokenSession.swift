@@ -42,25 +42,29 @@ private func ctkSecretString(_ secretPtr: UnsafePointer<UInt8>?, _ secretLen: In
 }
 
 @_cdecl("ctk_token_session_new")
-public func ctk_token_session_new(_ tokenPtr: UnsafeMutableRawPointer?) -> UnsafeMutableRawPointer? {
-    guard let tokenPtr else { return nil }
-    let token: TKToken = ctkBorrow(tokenPtr)
+public func ctk_token_session_new(
+    _ tokenPtr: UnsafeMutableRawPointer?,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+) -> UnsafeMutableRawPointer? {
+    guard let token = ctkBorrow(tokenPtr, as: TKToken.self, errorOut) else { return nil }
     return ctkRetain(TKTokenSession(token: token))
 }
 
 @_cdecl("ctk_smart_card_token_session_new")
-public func ctk_smart_card_token_session_new(_ tokenPtr: UnsafeMutableRawPointer?) -> UnsafeMutableRawPointer? {
-    guard let tokenPtr else { return nil }
-    let token: TKSmartCardToken = ctkBorrow(tokenPtr)
+public func ctk_smart_card_token_session_new(
+    _ tokenPtr: UnsafeMutableRawPointer?,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+) -> UnsafeMutableRawPointer? {
+    guard let token = ctkBorrow(tokenPtr, as: TKSmartCardToken.self, errorOut) else { return nil }
     return ctkRetain(TKSmartCardTokenSession(token: token))
 }
 
 @_cdecl("ctk_token_session_token_instance_id")
 public func ctk_token_session_token_instance_id(
-    _ sessionPtr: UnsafeMutableRawPointer?
+    _ sessionPtr: UnsafeMutableRawPointer?,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> UnsafeMutablePointer<CChar>? {
-    guard let sessionPtr else { return nil }
-    let session: TKTokenSession = ctkBorrow(sessionPtr)
+    guard let session = ctkBorrow(sessionPtr, as: TKTokenSession.self, errorOut) else { return nil }
     guard #available(macOS 10.15, *) else {
         return nil
     }
@@ -69,32 +73,35 @@ public func ctk_token_session_token_instance_id(
 
 @_cdecl("ctk_smart_card_token_session_smart_card")
 public func ctk_smart_card_token_session_smart_card(
-    _ sessionPtr: UnsafeMutableRawPointer?
+    _ sessionPtr: UnsafeMutableRawPointer?,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> UnsafeMutableRawPointer? {
-    guard let sessionPtr else { return nil }
-    let session: TKSmartCardTokenSession = ctkBorrow(sessionPtr)
+    guard let session = ctkBorrow(sessionPtr, as: TKSmartCardTokenSession.self, errorOut) else { return nil }
     return ctkRetain(session.smartCard)
 }
 
 @_cdecl("ctk_smart_card_token_session_get_smart_card")
 public func ctk_smart_card_token_session_get_smart_card(
     _ sessionPtr: UnsafeMutableRawPointer?,
+    _ outSmartCard: UnsafeMutablePointer<UnsafeMutableRawPointer?>,
     _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
-) -> UnsafeMutableRawPointer? {
+) -> Int32 {
+    outSmartCard.pointee = nil
     guard let sessionPtr else {
         ctkWriteError(errorOut, "missing smart-card token session handle")
-        return nil
+        return CTK_INVALID_ARGUMENT
     }
-    let session: TKSmartCardTokenSession = ctkBorrow(sessionPtr)
+    guard let session = ctkBorrow(sessionPtr, as: TKSmartCardTokenSession.self, errorOut) else { return CTK_INVALID_ARGUMENT }
     guard #available(macOS 26.0, *) else {
         ctkWriteError(errorOut, "getSmartCard() requires macOS 26.0 or newer")
-        return nil
+        return CTK_UNSUPPORTED
     }
     do {
-        return ctkRetain(try session.getSmartCard())
+        outSmartCard.pointee = ctkRetain(try session.getSmartCard())
+        return CTK_OK
     } catch {
         ctkWriteNSError(errorOut, fallback: "failed to retrieve smart card", error: error)
-        return nil
+        return ctkStatus(from: error)
     }
 }
 
@@ -112,7 +119,7 @@ public func ctk_token_auth_operation_finish(
         ctkWriteError(errorOut, "missing token auth operation handle")
         return CTK_INVALID_ARGUMENT
     }
-    let operation: TKTokenAuthOperation = ctkBorrow(operationPtr)
+    guard let operation = ctkBorrow(operationPtr, as: TKTokenAuthOperation.self, errorOut) else { return CTK_INVALID_ARGUMENT }
     do {
         try operation.finish()
         return CTK_OK
@@ -134,13 +141,9 @@ public func ctk_token_password_auth_operation_password(
     _ outLen: UnsafeMutablePointer<Int>,
     _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> Int32 {
-    guard let operationPtr else {
-        outBytes.pointee = nil
-        outLen.pointee = 0
-        ctkWriteError(errorOut, "missing token password auth operation handle")
-        return CTK_INVALID_ARGUMENT
-    }
-    let operation: TKTokenPasswordAuthOperation = ctkBorrow(operationPtr)
+    outBytes.pointee = nil
+    outLen.pointee = 0
+    guard let operation = ctkBorrow(operationPtr, as: TKTokenPasswordAuthOperation.self, errorOut) else { return CTK_INVALID_ARGUMENT }
     return ctkCopySecret(operation.password, outBytes, outLen, errorOut)
 }
 
@@ -156,7 +159,7 @@ public func ctk_token_password_auth_operation_set_password(
         ctkWriteError(errorOut, "missing token password auth operation handle")
         return CTK_INVALID_ARGUMENT
     }
-    let operation: TKTokenPasswordAuthOperation = ctkBorrow(operationPtr)
+    guard let operation = ctkBorrow(operationPtr, as: TKTokenPasswordAuthOperation.self, errorOut) else { return CTK_INVALID_ARGUMENT }
     guard hasPassword else {
         operation.password = nil
         return CTK_OK
@@ -176,10 +179,10 @@ public func ctk_token_smart_card_pin_auth_operation_new() -> UnsafeMutableRawPoi
 
 @_cdecl("ctk_token_smart_card_pin_auth_operation_json")
 public func ctk_token_smart_card_pin_auth_operation_json(
-    _ operationPtr: UnsafeMutableRawPointer?
+    _ operationPtr: UnsafeMutableRawPointer?,
+    _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> UnsafeMutablePointer<CChar>? {
-    guard let operationPtr else { return nil }
-    let operation: TKTokenSmartCardPINAuthOperation = ctkBorrow(operationPtr)
+    guard let operation = ctkBorrow(operationPtr, as: TKTokenSmartCardPINAuthOperation.self, errorOut) else { return nil }
     return ctkCString(ctkJSONString(ctkTokenSmartCardPinAuthOperationDictionary(operation)))
 }
 
@@ -197,7 +200,7 @@ public func ctk_token_smart_card_pin_auth_operation_update_json(
         ctkWriteError(errorOut, "invalid smart-card PIN auth operation JSON payload")
         return CTK_INVALID_ARGUMENT
     }
-    let operation: TKTokenSmartCardPINAuthOperation = ctkBorrow(operationPtr)
+    guard let operation = ctkBorrow(operationPtr, as: TKTokenSmartCardPINAuthOperation.self, errorOut) else { return CTK_INVALID_ARGUMENT }
     if let pinFormat = value["pinFormat"] as? [String: Any] {
         ctkApplySmartCardPINFormat(pinFormat, to: operation.pinFormat)
     }
@@ -215,13 +218,9 @@ public func ctk_token_smart_card_pin_auth_operation_pin(
     _ outLen: UnsafeMutablePointer<Int>,
     _ errorOut: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> Int32 {
-    guard let operationPtr else {
-        outBytes.pointee = nil
-        outLen.pointee = 0
-        ctkWriteError(errorOut, "missing smart-card PIN auth operation handle")
-        return CTK_INVALID_ARGUMENT
-    }
-    let operation: TKTokenSmartCardPINAuthOperation = ctkBorrow(operationPtr)
+    outBytes.pointee = nil
+    outLen.pointee = 0
+    guard let operation = ctkBorrow(operationPtr, as: TKTokenSmartCardPINAuthOperation.self, errorOut) else { return CTK_INVALID_ARGUMENT }
     return ctkCopySecret(operation.pin, outBytes, outLen, errorOut)
 }
 
@@ -237,7 +236,7 @@ public func ctk_token_smart_card_pin_auth_operation_set_pin(
         ctkWriteError(errorOut, "missing smart-card PIN auth operation handle")
         return CTK_INVALID_ARGUMENT
     }
-    let operation: TKTokenSmartCardPINAuthOperation = ctkBorrow(operationPtr)
+    guard let operation = ctkBorrow(operationPtr, as: TKTokenSmartCardPINAuthOperation.self, errorOut) else { return CTK_INVALID_ARGUMENT }
     guard hasPIN else {
         operation.pin = nil
         return CTK_OK
@@ -260,7 +259,12 @@ public func ctk_token_smart_card_pin_auth_operation_set_smart_card(
         ctkWriteError(errorOut, "missing smart-card PIN auth operation handle")
         return CTK_INVALID_ARGUMENT
     }
-    let operation: TKTokenSmartCardPINAuthOperation = ctkBorrow(operationPtr)
-    operation.smartCard = smartCardPtr.map { ctkBorrow($0, as: TKSmartCard.self) }
+    guard let operation = ctkBorrow(operationPtr, as: TKTokenSmartCardPINAuthOperation.self, errorOut) else { return CTK_INVALID_ARGUMENT }
+    if let smartCardPtr {
+        guard let smartCard = ctkBorrow(smartCardPtr, as: TKSmartCard.self, errorOut) else { return CTK_INVALID_ARGUMENT }
+        operation.smartCard = smartCard
+    } else {
+        operation.smartCard = nil
+    }
     return CTK_OK
 }

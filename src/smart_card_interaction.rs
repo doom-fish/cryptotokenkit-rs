@@ -1,5 +1,5 @@
 use core::ffi::c_void;
-use std::ops::{Deref, DerefMut};
+use std::ops::Deref;
 use std::ptr;
 use std::sync::{Mutex, PoisonError};
 
@@ -7,7 +7,9 @@ use doom_fish_utils::callback_context::CallbackContext;
 
 use crate::error::CryptoTokenKitError;
 use crate::ffi;
-use crate::private::{decode_optional_json, encode_json_cstring, status_result, to_cstring};
+use crate::private::{
+    checked, decode_optional_json, encode_json_cstring, status_result, to_cstring,
+};
 use crate::scard_slot_manager::SmartCardSlot;
 use crate::smart_card::{
     SmartCard, SmartCardPinCompletion, SmartCardPinConfirmation, SmartCardPinFormat,
@@ -132,65 +134,72 @@ impl SmartCardUserInteraction {
         Ok(SmartCardUserInteractionDelegateHandle { raw, context })
     }
 
-    #[must_use]
     /// Returns whether `TKSmartCardUserInteraction` currently has the associated bridge state.
-    pub fn has_delegate(&self) -> bool {
-        unsafe {
-            ffi::smart_card_interaction::ctk_smart_card_user_interaction_has_delegate(self.raw)
-        }
+    pub fn has_delegate(&self) -> Result<bool, CryptoTokenKitError> {
+        checked(|error| unsafe {
+            ffi::smart_card_interaction::ctk_smart_card_user_interaction_has_delegate(
+                self.raw, error,
+            )
+        })
     }
 
     /// Clears the corresponding `TKSmartCardUserInteraction` bridge state.
-    pub fn clear_delegate(&self) {
-        unsafe {
-            ffi::smart_card_interaction::ctk_smart_card_user_interaction_clear_delegate(self.raw);
-        };
+    pub fn clear_delegate(&self) -> Result<(), CryptoTokenKitError> {
+        checked(|error| unsafe {
+            ffi::smart_card_interaction::ctk_smart_card_user_interaction_clear_delegate(
+                self.raw, error,
+            );
+        })
     }
 
     /// Wraps the corresponding `TKSmartCardUserInteraction` operation.
-    pub fn simulate_delegate_event(&self, event: SmartCardUserInteractionEvent) {
-        unsafe {
+    pub fn simulate_delegate_event(
+        &self,
+        event: SmartCardUserInteractionEvent,
+    ) -> Result<(), CryptoTokenKitError> {
+        checked(|error| unsafe {
             ffi::smart_card_interaction::ctk_smart_card_user_interaction_emit_delegate_event(
                 self.raw,
                 event as i32,
+                error,
             );
-        };
+        })
     }
 
-    #[must_use]
     /// Wraps the corresponding `TKSmartCardUserInteraction` operation.
-    pub fn initial_timeout(&self) -> f64 {
-        unsafe {
-            ffi::smart_card_interaction::ctk_smart_card_user_interaction_initial_timeout(self.raw)
-        }
-    }
-
-    /// Sets the corresponding `TKSmartCardUserInteraction` value.
-    pub fn set_initial_timeout(&self, timeout: f64) {
-        unsafe {
-            ffi::smart_card_interaction::ctk_smart_card_user_interaction_set_initial_timeout(
-                self.raw, timeout,
-            );
-        };
-    }
-
-    #[must_use]
-    /// Wraps the corresponding `TKSmartCardUserInteraction` operation.
-    pub fn interaction_timeout(&self) -> f64 {
-        unsafe {
-            ffi::smart_card_interaction::ctk_smart_card_user_interaction_interaction_timeout(
-                self.raw,
+    pub fn initial_timeout(&self) -> Result<f64, CryptoTokenKitError> {
+        checked(|error| unsafe {
+            ffi::smart_card_interaction::ctk_smart_card_user_interaction_initial_timeout(
+                self.raw, error,
             )
-        }
+        })
     }
 
     /// Sets the corresponding `TKSmartCardUserInteraction` value.
-    pub fn set_interaction_timeout(&self, timeout: f64) {
-        unsafe {
-            ffi::smart_card_interaction::ctk_smart_card_user_interaction_set_interaction_timeout(
-                self.raw, timeout,
+    pub fn set_initial_timeout(&self, timeout: f64) -> Result<(), CryptoTokenKitError> {
+        checked(|error| unsafe {
+            ffi::smart_card_interaction::ctk_smart_card_user_interaction_set_initial_timeout(
+                self.raw, timeout, error,
             );
-        };
+        })
+    }
+
+    /// Wraps the corresponding `TKSmartCardUserInteraction` operation.
+    pub fn interaction_timeout(&self) -> Result<f64, CryptoTokenKitError> {
+        checked(|error| unsafe {
+            ffi::smart_card_interaction::ctk_smart_card_user_interaction_interaction_timeout(
+                self.raw, error,
+            )
+        })
+    }
+
+    /// Sets the corresponding `TKSmartCardUserInteraction` value.
+    pub fn set_interaction_timeout(&self, timeout: f64) -> Result<(), CryptoTokenKitError> {
+        checked(|error| unsafe {
+            ffi::smart_card_interaction::ctk_smart_card_user_interaction_set_interaction_timeout(
+                self.raw, timeout, error,
+            );
+        })
     }
 
     /// Invokes the corresponding `TKSmartCardUserInteraction` operation.
@@ -205,10 +214,11 @@ impl SmartCardUserInteraction {
         status_result(status, error_ptr)
     }
 
-    #[must_use]
     /// Invokes the corresponding `TKSmartCardUserInteraction` operation.
-    pub fn cancel(&self) -> bool {
-        unsafe { ffi::smart_card_interaction::ctk_smart_card_user_interaction_cancel(self.raw) }
+    pub fn cancel(&self) -> Result<bool, CryptoTokenKitError> {
+        checked(|error| unsafe {
+            ffi::smart_card_interaction::ctk_smart_card_user_interaction_cancel(self.raw, error)
+        })
     }
 }
 
@@ -234,31 +244,39 @@ impl SmartCardUserInteractionForPinOperation {
         }
     }
 
-    #[must_use]
     /// Wraps the corresponding `TKSmartCardUserInteractionForPINOperation` operation.
-    pub fn pin_completion(&self) -> SmartCardPinCompletion {
-        SmartCardPinCompletion(unsafe {
-            ffi::smart_card_interaction::ctk_smart_card_pin_interaction_completion(self.inner.raw())
+    pub fn pin_completion(&self) -> Result<SmartCardPinCompletion, CryptoTokenKitError> {
+        checked(|error| unsafe {
+            ffi::smart_card_interaction::ctk_smart_card_pin_interaction_completion(
+                self.inner.raw(),
+                error,
+            )
         })
+        .map(SmartCardPinCompletion)
     }
 
     /// Sets the corresponding `TKSmartCardUserInteractionForPINOperation` value.
-    pub fn set_pin_completion(&self, completion: SmartCardPinCompletion) {
-        unsafe {
+    pub fn set_pin_completion(
+        &self,
+        completion: SmartCardPinCompletion,
+    ) -> Result<(), CryptoTokenKitError> {
+        checked(|error| unsafe {
             ffi::smart_card_interaction::ctk_smart_card_pin_interaction_set_completion(
                 self.inner.raw(),
                 completion.bits(),
+                error,
             );
-        };
+        })
     }
 
     /// Wraps the corresponding `TKSmartCardUserInteractionForPINOperation` operation.
     pub fn pin_message_indices(&self) -> Result<Option<Vec<i64>>, CryptoTokenKitError> {
-        let ptr = unsafe {
+        let ptr = checked(|error| unsafe {
             ffi::smart_card_interaction::ctk_smart_card_pin_interaction_message_indices_json(
                 self.inner.raw(),
+                error,
             )
-        };
+        })?;
         decode_optional_json(ptr)
     }
 
@@ -293,11 +311,12 @@ impl SmartCardUserInteractionForPinOperation {
 
     /// Wraps the corresponding `TKSmartCardUserInteractionForPINOperation` operation.
     pub fn locale_identifier(&self) -> Result<String, CryptoTokenKitError> {
-        let ptr = unsafe {
+        let ptr = checked(|error| unsafe {
             ffi::smart_card_interaction::ctk_smart_card_pin_interaction_locale_identifier(
                 self.inner.raw(),
+                error,
             )
-        };
+        })?;
         if ptr.is_null() {
             return Err(CryptoTokenKitError::FrameworkError(
                 "Swift bridge returned a null locale identifier".into(),
@@ -335,21 +354,24 @@ impl SmartCardUserInteractionForPinOperation {
         status_result(status, error_ptr)
     }
 
-    #[must_use]
     /// Wraps the corresponding `TKSmartCardUserInteractionForPINOperation` operation.
-    pub fn result_status_word(&self) -> u16 {
-        unsafe {
-            ffi::smart_card_interaction::ctk_smart_card_pin_interaction_result_sw(self.inner.raw())
-        }
+    pub fn result_status_word(&self) -> Result<u16, CryptoTokenKitError> {
+        checked(|error| unsafe {
+            ffi::smart_card_interaction::ctk_smart_card_pin_interaction_result_sw(
+                self.inner.raw(),
+                error,
+            )
+        })
     }
 
     /// Wraps the corresponding `TKSmartCardUserInteractionForPINOperation` operation.
     pub fn result_data(&self) -> Result<Option<Vec<u8>>, CryptoTokenKitError> {
-        let ptr = unsafe {
+        let ptr = checked(|error| unsafe {
             ffi::smart_card_interaction::ctk_smart_card_pin_interaction_result_data_json(
                 self.inner.raw(),
+                error,
             )
-        };
+        })?;
         decode_optional_json(ptr)
     }
 }
@@ -359,12 +381,6 @@ impl Deref for SmartCardUserInteractionForPinOperation {
 
     fn deref(&self) -> &Self::Target {
         &self.inner
-    }
-}
-
-impl DerefMut for SmartCardUserInteractionForPinOperation {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.inner
     }
 }
 
@@ -390,12 +406,6 @@ impl Deref for SmartCardUserInteractionForSecurePinVerification {
     }
 }
 
-impl DerefMut for SmartCardUserInteractionForSecurePinVerification {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.inner
-    }
-}
-
 /// Wraps `TKSmartCardUserInteractionForSecurePINChange`.
 pub struct SmartCardUserInteractionForSecurePinChange {
     inner: SmartCardUserInteractionForPinOperation,
@@ -409,24 +419,29 @@ impl SmartCardUserInteractionForSecurePinChange {
         }
     }
 
-    #[must_use]
     /// Wraps the corresponding `TKSmartCardUserInteractionForSecurePINChange` operation.
-    pub fn pin_confirmation(&self) -> SmartCardPinConfirmation {
-        SmartCardPinConfirmation(unsafe {
+    pub fn pin_confirmation(&self) -> Result<SmartCardPinConfirmation, CryptoTokenKitError> {
+        checked(|error| unsafe {
             ffi::smart_card_interaction::ctk_smart_card_pin_change_interaction_confirmation(
                 self.inner.raw(),
+                error,
             )
         })
+        .map(SmartCardPinConfirmation)
     }
 
     /// Sets the corresponding `TKSmartCardUserInteractionForSecurePINChange` value.
-    pub fn set_pin_confirmation(&self, confirmation: SmartCardPinConfirmation) {
-        unsafe {
+    pub fn set_pin_confirmation(
+        &self,
+        confirmation: SmartCardPinConfirmation,
+    ) -> Result<(), CryptoTokenKitError> {
+        checked(|error| unsafe {
             ffi::smart_card_interaction::ctk_smart_card_pin_change_interaction_set_confirmation(
                 self.inner.raw(),
                 confirmation.bits(),
+                error,
             );
-        };
+        })
     }
 }
 
@@ -435,12 +450,6 @@ impl Deref for SmartCardUserInteractionForSecurePinChange {
 
     fn deref(&self) -> &Self::Target {
         &self.inner
-    }
-}
-
-impl DerefMut for SmartCardUserInteractionForSecurePinChange {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.inner
     }
 }
 
@@ -492,7 +501,9 @@ unsafe extern "C" fn smart_card_user_interaction_trampoline(
 impl SmartCard {
     /// Wraps the corresponding `TKSmartCard` operation.
     pub fn slot(&self) -> Result<SmartCardSlot, CryptoTokenKitError> {
-        let raw = unsafe { ffi::smart_card_interaction::ctk_smart_card_slot(self.raw()) };
+        let raw = checked(|error| unsafe {
+            ffi::smart_card_interaction::ctk_smart_card_slot(self.raw(), error)
+        })?;
         if raw.is_null() {
             return Err(CryptoTokenKitError::FrameworkError(
                 "Swift bridge returned a null smart-card slot".into(),
@@ -522,23 +533,20 @@ impl SmartCard {
         pin_byte_offset: isize,
     ) -> Result<Option<SmartCardUserInteractionForSecurePinVerification>, CryptoTokenKitError> {
         let pin_format = encode_json_cstring(pin_format)?;
+        let mut raw = ptr::null_mut();
         let mut error_ptr = ptr::null_mut();
-        let raw = unsafe {
+        let status = unsafe {
             ffi::smart_card_interaction::ctk_smart_card_user_interaction_for_secure_pin_verification(
                 self.raw(),
                 pin_format.as_ptr(),
                 apdu.as_ptr(),
                 apdu.len(),
                 pin_byte_offset,
+                &raw mut raw,
                 &raw mut error_ptr,
             )
         };
-        if raw.is_null() && !error_ptr.is_null() {
-            return Err(crate::error::from_swift(
-                ffi::status::FRAMEWORK_ERROR,
-                error_ptr,
-            ));
-        }
+        status_result(status, error_ptr)?;
         Ok((!raw.is_null())
             .then(|| SmartCardUserInteractionForSecurePinVerification::from_raw(raw)))
     }
@@ -552,8 +560,9 @@ impl SmartCard {
         new_pin_byte_offset: isize,
     ) -> Result<Option<SmartCardUserInteractionForSecurePinChange>, CryptoTokenKitError> {
         let pin_format = encode_json_cstring(pin_format)?;
+        let mut raw = ptr::null_mut();
         let mut error_ptr = ptr::null_mut();
-        let raw = unsafe {
+        let status = unsafe {
             ffi::smart_card_interaction::ctk_smart_card_user_interaction_for_secure_pin_change(
                 self.raw(),
                 pin_format.as_ptr(),
@@ -561,15 +570,59 @@ impl SmartCard {
                 apdu.len(),
                 current_pin_byte_offset,
                 new_pin_byte_offset,
+                &raw mut raw,
                 &raw mut error_ptr,
             )
         };
-        if raw.is_null() && !error_ptr.is_null() {
-            return Err(crate::error::from_swift(
-                ffi::status::FRAMEWORK_ERROR,
-                error_ptr,
-            ));
-        }
+        status_result(status, error_ptr)?;
         Ok((!raw.is_null()).then(|| SmartCardUserInteractionForSecurePinChange::from_raw(raw)))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        SmartCardUserInteractionForPinOperation, SmartCardUserInteractionForSecurePinChange,
+    };
+    use crate::private::test_support::{assert_wrong_handle, retained};
+    use crate::smart_card::{SmartCard, SmartCardPinConfirmation, SmartCardPinFormat};
+
+    #[test]
+    fn interaction_handles_of_another_class_are_rejected() {
+        let card = SmartCard::mock("Handle Type Reader").expect("mock card");
+        let verification = card
+            .user_interaction_for_secure_pin_verification(
+                &SmartCardPinFormat::default(),
+                &[0x00, 0x20, 0x00, 0x00],
+                0,
+            )
+            .expect("verification")
+            .expect("mock verification");
+
+        let change =
+            SmartCardUserInteractionForSecurePinChange::from_raw(retained(verification.raw()));
+        assert_wrong_handle(change.pin_confirmation());
+        assert_wrong_handle(change.set_pin_confirmation(SmartCardPinConfirmation::CURRENT));
+        change
+            .pin_completion()
+            .expect("a verification interaction is still a PIN operation");
+
+        let from_card = SmartCardUserInteractionForPinOperation::from_raw(retained(card.raw()));
+        assert_wrong_handle(from_card.pin_completion());
+        assert_wrong_handle(from_card.set_locale_identifier(Some("en-US")));
+        assert_wrong_handle(from_card.initial_timeout());
+        assert_wrong_handle(from_card.has_delegate());
+        assert_wrong_handle(from_card.run());
+
+        let card_from_interaction = SmartCard::from_raw(retained(verification.raw()));
+        assert_wrong_handle(card_from_interaction.slot());
+        assert_wrong_handle(
+            card_from_interaction.user_interaction_for_secure_pin_change(
+                &SmartCardPinFormat::default(),
+                &[0x00, 0x24, 0x00, 0x00],
+                0,
+                8,
+            ),
+        );
     }
 }

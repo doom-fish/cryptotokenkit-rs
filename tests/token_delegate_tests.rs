@@ -89,7 +89,7 @@ impl TokenSessionDelegate for RecordingSessionDelegate {
         _algorithm: &cryptotokenkit::TokenKeyAlgorithm,
         parameters: &TokenKeyExchangeParameters,
     ) -> Result<Vec<u8>, cryptotokenkit::CryptoTokenKitError> {
-        let requested_size = parameters.requested_size();
+        let requested_size = parameters.requested_size()?;
         let shared_info = parameters.shared_info()?;
         {
             let mut state = self.state.lock().unwrap();
@@ -126,7 +126,7 @@ impl TokenDelegate for RecordingTokenDelegate {
         token: &Token,
     ) -> Result<Option<TokenSession>, cryptotokenkit::CryptoTokenKitError> {
         self.state.lock().unwrap().created_sessions += 1;
-        Ok(Some(TokenSession::new(token)))
+        Ok(Some(TokenSession::new(token)?))
     }
 
     fn terminate_session(&mut self, _token: &Token, _session: &TokenSession) {
@@ -209,14 +209,14 @@ fn token_delegates_and_gap_fill_helpers_work() -> Result<(), Box<dyn std::error:
 
     let driver = TokenDriver::new();
     let token = Token::new(&driver, "com.example.cryptotokenkit.delegate-test")?;
-    let session = TokenSession::new(&token);
+    let session = TokenSession::new(&token)?;
     let key_id = TokenObjectId::new("key-1");
 
     let session_state = Arc::new(Mutex::new(SessionState::default()));
     let session_handle = session.set_delegate(RecordingSessionDelegate {
         state: Arc::clone(&session_state),
     })?;
-    assert!(session.has_delegate());
+    assert!(session.has_delegate()?);
     assert_eq!(session.token()?.instance_id()?, token.instance_id()?);
 
     let auth = session
@@ -262,13 +262,13 @@ fn token_delegates_and_gap_fill_helpers_work() -> Result<(), Box<dyn std::error:
         vec![3, 32]
     );
     drop(session_handle);
-    assert!(!session.has_delegate());
+    assert!(!session.has_delegate()?);
 
     let token_state = Arc::new(Mutex::new(TokenState::default()));
     let token_handle = token.set_delegate(RecordingTokenDelegate {
         state: Arc::clone(&token_state),
     })?;
-    assert!(token.has_delegate());
+    assert!(token.has_delegate()?);
     let created_session = token
         .invoke_delegate_create_session()?
         .expect("delegate should create a token session");
@@ -276,9 +276,9 @@ fn token_delegates_and_gap_fill_helpers_work() -> Result<(), Box<dyn std::error:
         created_session.token_instance_id()?,
         "com.example.cryptotokenkit.delegate-test"
     );
-    token.invoke_delegate_terminate_session(&created_session);
+    token.invoke_delegate_terminate_session(&created_session)?;
     drop(token_handle);
-    assert!(!token.has_delegate());
+    assert!(!token.has_delegate()?);
 
     let driver_snapshot = TokenConfigurationSnapshot {
         instance_id: "driver-instance".into(),
@@ -291,14 +291,14 @@ fn token_delegates_and_gap_fill_helpers_work() -> Result<(), Box<dyn std::error:
     let driver_handle = driver.set_delegate(RecordingDriverDelegate {
         state: Arc::clone(&driver_state),
     })?;
-    assert!(driver.has_delegate());
+    assert!(driver.has_delegate()?);
     let delegate_token = driver
         .invoke_delegate_token_for_configuration(&driver_snapshot)?
         .expect("delegate should create token for configuration");
     assert_eq!(delegate_token.instance_id()?, "driver-instance");
-    driver.invoke_delegate_terminate_token(&delegate_token);
+    driver.invoke_delegate_terminate_token(&delegate_token)?;
     drop(driver_handle);
-    assert!(!driver.has_delegate());
+    assert!(!driver.has_delegate()?);
 
     let smart_card_driver = SmartCardTokenDriver::new();
     let mock_smart_card = SmartCard::mock("Mock Token Reader")?;
@@ -306,14 +306,14 @@ fn token_delegates_and_gap_fill_helpers_work() -> Result<(), Box<dyn std::error:
     let smart_card_handle = smart_card_driver.set_delegate(RecordingSmartCardDriverDelegate {
         state: Arc::clone(&smart_card_state),
     })?;
-    assert!(smart_card_driver.has_delegate());
+    assert!(smart_card_driver.has_delegate()?);
     let smart_card_token = smart_card_driver
         .invoke_delegate_create_token(&mock_smart_card, Some(&[0xA0, 0x00, 0x00, 0x01]))?
         .expect("delegate should create smart-card token");
     assert_eq!(smart_card_token.aid()?, Some(vec![0xA0, 0x00, 0x00, 0x01]));
-    smart_card_driver.invoke_delegate_terminate_token(&smart_card_token);
+    smart_card_driver.invoke_delegate_terminate_token(&smart_card_token)?;
     drop(smart_card_handle);
-    assert!(!smart_card_driver.has_delegate());
+    assert!(!smart_card_driver.has_delegate()?);
 
     {
         let session_state = session_state.lock().unwrap();

@@ -34,7 +34,7 @@ impl TokenDelegate for TokenDelegateImpl {
         &mut self,
         token: &Token,
     ) -> Result<Option<TokenSession>, cryptotokenkit::CryptoTokenKitError> {
-        Ok(Some(TokenSession::new(token)))
+        Ok(Some(TokenSession::new(token)?))
     }
 }
 
@@ -71,7 +71,7 @@ impl SmartCardTokenDriverDelegate for SmartCardDriverDelegateImpl {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let driver = TokenDriver::new();
     let token = Token::new(&driver, "com.example.delegate-example.token")?;
-    let session = TokenSession::new(&token);
+    let session = TokenSession::new(&token)?;
     let session_log = Arc::new(Mutex::new(Vec::new()));
     let _session_handle = session.set_delegate(SessionDelegate {
         log: Arc::clone(&session_log),

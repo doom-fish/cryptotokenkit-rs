@@ -9,8 +9,8 @@ use serde_json::Value;
 use crate::error::{failure_status, CryptoTokenKitError, TKErrorCode};
 use crate::ffi;
 use crate::private::{
-    decode_json, decode_optional_json, encode_json_cstring, json_to_ptr, status_result, to_cstring,
-    write_error_ptr,
+    checked, decode_json, decode_optional_json, encode_json_cstring, json_to_ptr, status_result,
+    to_cstring, write_error_ptr,
 };
 use crate::smart_card::SmartCard;
 use crate::token::{SmartCardToken, Token, TokenConfigurationSnapshot};
@@ -41,18 +41,23 @@ impl TokenKeyAlgorithm {
     /// Wraps the corresponding `TKTokenKeyAlgorithm` operation.
     pub fn is_algorithm(&self, algorithm: &str) -> Result<bool, CryptoTokenKitError> {
         let algorithm = to_cstring(algorithm)?;
-        Ok(unsafe {
-            ffi::token_delegate::ctk_token_key_algorithm_is_algorithm(self.raw, algorithm.as_ptr())
+        checked(|error| unsafe {
+            ffi::token_delegate::ctk_token_key_algorithm_is_algorithm(
+                self.raw,
+                algorithm.as_ptr(),
+                error,
+            )
         })
     }
 
     /// Wraps the corresponding `TKTokenKeyAlgorithm` operation.
     pub fn supports_algorithm(&self, algorithm: &str) -> Result<bool, CryptoTokenKitError> {
         let algorithm = to_cstring(algorithm)?;
-        Ok(unsafe {
+        checked(|error| unsafe {
             ffi::token_delegate::ctk_token_key_algorithm_supports_algorithm(
                 self.raw,
                 algorithm.as_ptr(),
+                error,
             )
         })
     }
@@ -80,17 +85,18 @@ impl TokenKeyExchangeParameters {
         Self { raw }
     }
 
-    #[must_use]
     /// Wraps the corresponding `TKTokenKeyExchangeParameters` operation.
-    pub fn requested_size(&self) -> isize {
-        unsafe { ffi::token_delegate::ctk_token_key_exchange_parameters_requested_size(self.raw) }
+    pub fn requested_size(&self) -> Result<isize, CryptoTokenKitError> {
+        checked(|error| unsafe {
+            ffi::token_delegate::ctk_token_key_exchange_parameters_requested_size(self.raw, error)
+        })
     }
 
     /// Wraps the corresponding `TKTokenKeyExchangeParameters` operation.
     pub fn shared_info(&self) -> Result<Option<Vec<u8>>, CryptoTokenKitError> {
-        let ptr = unsafe {
-            ffi::token_delegate::ctk_token_key_exchange_parameters_shared_info_json(self.raw)
-        };
+        let ptr = checked(|error| unsafe {
+            ffi::token_delegate::ctk_token_key_exchange_parameters_shared_info_json(self.raw, error)
+        })?;
         decode_optional_json(ptr)
     }
 }
@@ -117,13 +123,18 @@ pub enum TokenAuthOperationHandle {
 }
 
 impl TokenAuthOperationHandle {
-    #[must_use]
-    fn from_raw(raw: *mut c_void) -> Self {
-        match unsafe { ffi::token_delegate::ctk_token_auth_operation_kind(raw) } {
-            1 => Self::Password(TokenPasswordAuthOperation::from_raw(raw)),
-            2 => Self::SmartCardPin(TokenSmartCardPinAuthOperation::from_raw(raw)),
-            _ => Self::Base(TokenAuthOperation::from_raw(raw)),
-        }
+    fn from_raw(raw: *mut c_void) -> Result<Self, CryptoTokenKitError> {
+        let operation = TokenAuthOperation::from_raw(raw);
+        let kind = checked(|error| unsafe {
+            ffi::token_delegate::ctk_token_auth_operation_kind(raw, error)
+        })?;
+        Ok(match kind {
+            1 => Self::Password(TokenPasswordAuthOperation::from_raw(operation.into_raw())),
+            2 => Self::SmartCardPin(TokenSmartCardPinAuthOperation::from_raw(
+                operation.into_raw(),
+            )),
+            _ => Self::Base(operation),
+        })
     }
 
     fn into_raw(self) -> *mut c_void {
@@ -796,7 +807,9 @@ unsafe extern "C" fn smart_card_token_driver_terminate_token_trampoline(
 impl TokenSession {
     /// Returns the corresponding `TKTokenSession` value.
     pub fn token(&self) -> Result<Token, CryptoTokenKitError> {
-        let raw = unsafe { ffi::token_delegate::ctk_token_session_token(self.raw()) };
+        let raw = checked(|error| unsafe {
+            ffi::token_delegate::ctk_token_session_token(self.raw(), error)
+        })?;
         if raw.is_null() {
             return Err(CryptoTokenKitError::FrameworkError(
                 "Swift bridge returned a null token-session token".into(),
@@ -840,15 +853,18 @@ impl TokenSession {
         Ok(TokenSessionDelegateHandle { raw, context })
     }
 
-    #[must_use]
     /// Returns whether `TKTokenSession` currently has the associated bridge state.
-    pub fn has_delegate(&self) -> bool {
-        unsafe { ffi::token_delegate::ctk_token_session_has_delegate(self.raw()) }
+    pub fn has_delegate(&self) -> Result<bool, CryptoTokenKitError> {
+        checked(|error| unsafe {
+            ffi::token_delegate::ctk_token_session_has_delegate(self.raw(), error)
+        })
     }
 
     /// Clears the corresponding `TKTokenSession` bridge state.
-    pub fn clear_delegate(&self) {
-        unsafe { ffi::token_delegate::ctk_token_session_clear_delegate(self.raw()) };
+    pub fn clear_delegate(&self) -> Result<(), CryptoTokenKitError> {
+        checked(|error| unsafe {
+            ffi::token_delegate::ctk_token_session_clear_delegate(self.raw(), error);
+        })
     }
 
     /// Invokes the bridged `TKTokenSession` delegate callback.
@@ -870,7 +886,9 @@ impl TokenSession {
             )
         };
         status_result(status, error_ptr)?;
-        Ok((!raw.is_null()).then(|| TokenAuthOperationHandle::from_raw(raw)))
+        (!raw.is_null())
+            .then(|| TokenAuthOperationHandle::from_raw(raw))
+            .transpose()
     }
 
     /// Invokes the bridged `TKTokenSession` delegate callback.
@@ -884,13 +902,14 @@ impl TokenSession {
         let object_id = to_cstring(&key_object_id.0)?;
         let base_algorithm = to_cstring(base_algorithm)?;
         let supported_algorithms = encode_json_cstring(supported_algorithms)?;
-        Ok(unsafe {
+        checked(|error| unsafe {
             ffi::token_delegate::ctk_token_session_invoke_delegate_supports(
                 self.raw(),
                 operation.raw(),
                 object_id.as_ptr(),
                 base_algorithm.as_ptr(),
                 supported_algorithms.as_ptr(),
+                error,
             )
         })
     }
@@ -1021,7 +1040,9 @@ impl TokenSession {
 impl Token {
     /// Returns the corresponding `TKToken` value.
     pub fn token_driver(&self) -> Result<TokenDriver, CryptoTokenKitError> {
-        let raw = unsafe { ffi::token_delegate::ctk_token_token_driver(self.raw()) };
+        let raw = checked(|error| unsafe {
+            ffi::token_delegate::ctk_token_token_driver(self.raw(), error)
+        })?;
         if raw.is_null() {
             return Err(CryptoTokenKitError::FrameworkError(
                 "Swift bridge returned a null token driver".into(),
@@ -1059,15 +1080,16 @@ impl Token {
         Ok(TokenDelegateHandle { raw, context })
     }
 
-    #[must_use]
     /// Returns whether `TKToken` currently has the associated bridge state.
-    pub fn has_delegate(&self) -> bool {
-        unsafe { ffi::token_delegate::ctk_token_has_delegate(self.raw()) }
+    pub fn has_delegate(&self) -> Result<bool, CryptoTokenKitError> {
+        checked(|error| unsafe { ffi::token_delegate::ctk_token_has_delegate(self.raw(), error) })
     }
 
     /// Clears the corresponding `TKToken` bridge state.
-    pub fn clear_delegate(&self) {
-        unsafe { ffi::token_delegate::ctk_token_clear_delegate(self.raw()) };
+    pub fn clear_delegate(&self) -> Result<(), CryptoTokenKitError> {
+        checked(|error| unsafe {
+            ffi::token_delegate::ctk_token_clear_delegate(self.raw(), error);
+        })
     }
 
     /// Invokes the bridged `TKToken` delegate callback.
@@ -1088,13 +1110,17 @@ impl Token {
     }
 
     /// Invokes the bridged `TKToken` delegate callback.
-    pub fn invoke_delegate_terminate_session(&self, session: &TokenSession) {
-        unsafe {
+    pub fn invoke_delegate_terminate_session(
+        &self,
+        session: &TokenSession,
+    ) -> Result<(), CryptoTokenKitError> {
+        checked(|error| unsafe {
             ffi::token_delegate::ctk_token_invoke_delegate_terminate_session(
                 self.raw(),
                 session.raw(),
+                error,
             );
-        };
+        })
     }
 }
 
@@ -1175,15 +1201,18 @@ impl TokenDriver {
         Ok(TokenDriverDelegateHandle { raw, context })
     }
 
-    #[must_use]
     /// Returns whether `TKTokenDriver` currently has the associated bridge state.
-    pub fn has_delegate(&self) -> bool {
-        unsafe { ffi::token_delegate::ctk_token_driver_has_delegate(self.raw()) }
+    pub fn has_delegate(&self) -> Result<bool, CryptoTokenKitError> {
+        checked(|error| unsafe {
+            ffi::token_delegate::ctk_token_driver_has_delegate(self.raw(), error)
+        })
     }
 
     /// Clears the corresponding `TKTokenDriver` bridge state.
-    pub fn clear_delegate(&self) {
-        unsafe { ffi::token_delegate::ctk_token_driver_clear_delegate(self.raw()) };
+    pub fn clear_delegate(&self) -> Result<(), CryptoTokenKitError> {
+        checked(|error| unsafe {
+            ffi::token_delegate::ctk_token_driver_clear_delegate(self.raw(), error);
+        })
     }
 
     /// Invokes the bridged `TKTokenDriver` delegate callback.
@@ -1207,13 +1236,17 @@ impl TokenDriver {
     }
 
     /// Invokes the bridged `TKTokenDriver` delegate callback.
-    pub fn invoke_delegate_terminate_token(&self, token: &Token) {
-        unsafe {
+    pub fn invoke_delegate_terminate_token(
+        &self,
+        token: &Token,
+    ) -> Result<(), CryptoTokenKitError> {
+        checked(|error| unsafe {
             ffi::token_delegate::ctk_token_driver_invoke_delegate_terminate_token(
                 self.raw(),
                 token.raw(),
+                error,
             );
-        };
+        })
     }
 }
 
@@ -1250,15 +1283,18 @@ impl SmartCardTokenDriver {
         Ok(SmartCardTokenDriverDelegateHandle { raw, context })
     }
 
-    #[must_use]
     /// Returns whether `TKSmartCardTokenDriver` currently has the associated bridge state.
-    pub fn has_delegate(&self) -> bool {
-        unsafe { ffi::token_delegate::ctk_token_driver_has_delegate(self.raw()) }
+    pub fn has_delegate(&self) -> Result<bool, CryptoTokenKitError> {
+        checked(|error| unsafe {
+            ffi::token_delegate::ctk_token_driver_has_delegate(self.raw(), error)
+        })
     }
 
     /// Clears the corresponding `TKSmartCardTokenDriver` bridge state.
-    pub fn clear_delegate(&self) {
-        unsafe { ffi::token_delegate::ctk_token_driver_clear_delegate(self.raw()) };
+    pub fn clear_delegate(&self) -> Result<(), CryptoTokenKitError> {
+        checked(|error| unsafe {
+            ffi::token_delegate::ctk_token_driver_clear_delegate(self.raw(), error);
+        })
     }
 
     /// Invokes the bridged `TKSmartCardTokenDriver` delegate callback.
@@ -1288,13 +1324,17 @@ impl SmartCardTokenDriver {
     }
 
     /// Invokes the bridged `TKSmartCardTokenDriver` delegate callback.
-    pub fn invoke_delegate_terminate_token(&self, token: &SmartCardToken) {
-        unsafe {
+    pub fn invoke_delegate_terminate_token(
+        &self,
+        token: &SmartCardToken,
+    ) -> Result<(), CryptoTokenKitError> {
+        checked(|error| unsafe {
             ffi::token_delegate::ctk_smart_card_token_driver_invoke_delegate_terminate_token(
                 self.raw(),
                 token.raw(),
+                error,
             );
-        };
+        })
     }
 }
 
@@ -1304,12 +1344,17 @@ mod tests {
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::sync::Arc;
 
-    use super::{TokenKeyAlgorithm, TokenSessionDelegate};
+    use super::{
+        SmartCardTokenDriverDelegate, TokenAuthOperationHandle, TokenKeyAlgorithm,
+        TokenKeyExchangeParameters, TokenSessionDelegate,
+    };
     use crate::error::CryptoTokenKitError;
-    use crate::token::Token;
-    use crate::token_driver::TokenDriver;
+    use crate::private::test_support::{assert_wrong_handle, retained};
+    use crate::smart_card::SmartCard;
+    use crate::token::{SmartCardToken, Token};
+    use crate::token_driver::{SmartCardTokenDriver, TokenDriver};
     use crate::token_keychain_contents::TokenObjectId;
-    use crate::token_session::TokenSession;
+    use crate::token_session::{SmartCardTokenSession, TokenSession};
 
     unsafe extern "C" {
         fn objc_retain(object: *mut c_void) -> *mut c_void;
@@ -1348,7 +1393,7 @@ mod tests {
     fn callbacks_after_the_handle_is_dropped_never_reach_the_delegate() {
         let driver = TokenDriver::new();
         let token = Token::new(&driver, "com.example.cryptotokenkit.late-callback").expect("token");
-        let session = TokenSession::new(&token);
+        let session = TokenSession::new(&token).expect("session");
         let calls = Arc::new(AtomicUsize::new(0));
         let dropped = Arc::new(AtomicBool::new(false));
         let handle = session
@@ -1366,7 +1411,7 @@ mod tests {
         unsafe { objc_retain(delegate_box) };
         drop(handle);
 
-        assert!(session.has_delegate());
+        assert!(session.has_delegate().expect("has_delegate"));
         assert!(!dropped.load(Ordering::SeqCst));
         let error = sign(&session, b"late").expect_err("late callback must fail");
         assert!(error.message().contains("dropped"), "{error:?}");
@@ -1374,6 +1419,75 @@ mod tests {
 
         unsafe { objc_release(delegate_box) };
         assert!(dropped.load(Ordering::SeqCst));
-        assert!(!session.has_delegate());
+        assert!(!session.has_delegate().expect("has_delegate"));
+    }
+
+    struct DropFlag(Arc<AtomicBool>);
+
+    impl Drop for DropFlag {
+        fn drop(&mut self) {
+            self.0.store(true, Ordering::SeqCst);
+        }
+    }
+
+    impl TokenSessionDelegate for DropFlag {}
+
+    impl SmartCardTokenDriverDelegate for DropFlag {}
+
+    #[test]
+    fn delegate_argument_handles_of_another_class_are_rejected() {
+        let driver = TokenDriver::new();
+        let algorithm = TokenKeyAlgorithm::from_raw(retained(driver.raw()));
+        assert_wrong_handle(algorithm.is_algorithm("com.example.base"));
+        assert_wrong_handle(algorithm.supports_algorithm("com.example.base"));
+
+        let parameters = TokenKeyExchangeParameters::from_raw(retained(driver.raw()));
+        assert_wrong_handle(parameters.requested_size());
+        assert_wrong_handle(parameters.shared_info());
+
+        assert_wrong_handle(TokenAuthOperationHandle::from_raw(retained(driver.raw())));
+    }
+
+    #[test]
+    fn token_and_driver_handles_of_another_class_are_rejected() {
+        let driver = TokenDriver::new();
+        let token =
+            Token::new(&driver, "com.example.cryptotokenkit.driver-handles").expect("token");
+        let card = SmartCard::mock("Handle Type Reader").expect("mock card");
+
+        let smart_card_token = SmartCardToken::from_raw(retained(token.raw()));
+        assert_wrong_handle(smart_card_token.aid());
+        assert_wrong_handle(SmartCardTokenSession::new(&smart_card_token));
+
+        let smart_card_driver = SmartCardTokenDriver::from_raw(retained(driver.raw()));
+        assert_wrong_handle(SmartCardToken::new(
+            &card,
+            None,
+            "com.example.cryptotokenkit.wrong-driver",
+            &smart_card_driver,
+        ));
+        assert_wrong_handle(smart_card_driver.invoke_delegate_create_token(&card, None));
+        let dropped = Arc::new(AtomicBool::new(false));
+        assert_wrong_handle(smart_card_driver.set_delegate(DropFlag(Arc::clone(&dropped))));
+        assert!(dropped.load(Ordering::SeqCst));
+
+        let session = TokenSession::from_raw(retained(token.raw()));
+        let dropped = Arc::new(AtomicBool::new(false));
+        assert_wrong_handle(session.set_delegate(DropFlag(Arc::clone(&dropped))));
+        assert!(dropped.load(Ordering::SeqCst));
+
+        let driver_from_token = TokenDriver::from_raw(retained(token.raw()));
+        assert_wrong_handle(Token::new(
+            &driver_from_token,
+            "com.example.cryptotokenkit.wrong-driver",
+        ));
+        assert_wrong_handle(driver_from_token.has_delegate());
+
+        let token_from_driver = Token::from_raw(retained(driver.raw()));
+        assert_wrong_handle(token_from_driver.configuration());
+        assert_wrong_handle(token_from_driver.token_driver());
+        assert_wrong_handle(token_from_driver.keychain_contents_items());
+        assert_wrong_handle(token_from_driver.key_for_object_id(&TokenObjectId::new("key")));
+        assert_wrong_handle(TokenSession::new(&token_from_driver));
     }
 }

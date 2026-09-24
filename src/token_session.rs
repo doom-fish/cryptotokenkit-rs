@@ -6,7 +6,7 @@ use zeroize::{Zeroize, Zeroizing};
 
 use crate::error::CryptoTokenKitError;
 use crate::ffi;
-use crate::private::{decode_json, encode_json_cstring, status_result};
+use crate::private::{checked, decode_json, encode_json_cstring, status_result};
 use crate::smart_card::{SmartCard, SmartCardPinFormat};
 use crate::token::{SmartCardToken, Token};
 
@@ -102,12 +102,17 @@ fn write_secret(
 }
 
 impl TokenSession {
-    #[must_use]
     /// Creates a new wrapper around `TKTokenSession`.
-    pub fn new(token: &Token) -> Self {
-        let raw = unsafe { ffi::token_session::ctk_token_session_new(token.raw()) };
-        assert!(!raw.is_null(), "Swift bridge returned a null token session");
-        Self { raw }
+    pub fn new(token: &Token) -> Result<Self, CryptoTokenKitError> {
+        let raw = checked(|error| unsafe {
+            ffi::token_session::ctk_token_session_new(token.raw(), error)
+        })?;
+        if raw.is_null() {
+            return Err(CryptoTokenKitError::FrameworkError(
+                "Swift bridge returned a null token session".into(),
+            ));
+        }
+        Ok(Self { raw })
     }
 
     #[must_use]
@@ -128,7 +133,9 @@ impl TokenSession {
 
     /// Returns the corresponding `TKTokenSession` value.
     pub fn token_instance_id(&self) -> Result<String, CryptoTokenKitError> {
-        let ptr = unsafe { ffi::token_session::ctk_token_session_token_instance_id(self.raw) };
+        let ptr = checked(|error| unsafe {
+            ffi::token_session::ctk_token_session_token_instance_id(self.raw, error)
+        })?;
         if ptr.is_null() {
             return Err(CryptoTokenKitError::FrameworkError(
                 "Swift bridge returned a null session token identifier".into(),
@@ -139,20 +146,24 @@ impl TokenSession {
 }
 
 impl SmartCardTokenSession {
-    #[must_use]
     /// Creates a new wrapper around `TKSmartCardTokenSession`.
-    pub fn new(token: &SmartCardToken) -> Self {
-        let raw = unsafe { ffi::token_session::ctk_smart_card_token_session_new(token.raw()) };
-        assert!(
-            !raw.is_null(),
-            "Swift bridge returned a null smart-card token session"
-        );
-        Self { raw }
+    pub fn new(token: &SmartCardToken) -> Result<Self, CryptoTokenKitError> {
+        let raw = checked(|error| unsafe {
+            ffi::token_session::ctk_smart_card_token_session_new(token.raw(), error)
+        })?;
+        if raw.is_null() {
+            return Err(CryptoTokenKitError::FrameworkError(
+                "Swift bridge returned a null smart-card token session".into(),
+            ));
+        }
+        Ok(Self { raw })
     }
 
     /// Returns the corresponding `TKSmartCardTokenSession` value.
     pub fn token_instance_id(&self) -> Result<String, CryptoTokenKitError> {
-        let ptr = unsafe { ffi::token_session::ctk_token_session_token_instance_id(self.raw) };
+        let ptr = checked(|error| unsafe {
+            ffi::token_session::ctk_token_session_token_instance_id(self.raw, error)
+        })?;
         if ptr.is_null() {
             return Err(CryptoTokenKitError::FrameworkError(
                 "Swift bridge returned a null session token identifier".into(),
@@ -162,26 +173,25 @@ impl SmartCardTokenSession {
     }
 
     /// Returns the corresponding `TKSmartCardTokenSession` value.
-    pub fn smart_card(&self) -> Option<SmartCard> {
-        let raw = unsafe { ffi::token_session::ctk_smart_card_token_session_smart_card(self.raw) };
-        (!raw.is_null()).then_some(SmartCard::from_raw(raw))
+    pub fn smart_card(&self) -> Result<Option<SmartCard>, CryptoTokenKitError> {
+        let raw = checked(|error| unsafe {
+            ffi::token_session::ctk_smart_card_token_session_smart_card(self.raw, error)
+        })?;
+        Ok((!raw.is_null()).then_some(SmartCard::from_raw(raw)))
     }
 
     /// Returns the corresponding `TKSmartCardTokenSession` value via the reply-based framework entry point.
     pub fn get_smart_card(&self) -> Result<Option<SmartCard>, CryptoTokenKitError> {
+        let mut raw = ptr::null_mut();
         let mut error_ptr = ptr::null_mut();
-        let raw = unsafe {
+        let status = unsafe {
             ffi::token_session::ctk_smart_card_token_session_get_smart_card(
                 self.raw,
+                &raw mut raw,
                 &raw mut error_ptr,
             )
         };
-        if raw.is_null() && !error_ptr.is_null() {
-            return Err(crate::error::from_swift(
-                ffi::status::FRAMEWORK_ERROR,
-                error_ptr,
-            ));
-        }
+        status_result(status, error_ptr)?;
         Ok((!raw.is_null()).then_some(SmartCard::from_raw(raw)))
     }
 }
@@ -306,8 +316,9 @@ impl TokenSmartCardPinAuthOperation {
     }
 
     fn snapshot(&self) -> Result<TokenSmartCardPinAuthOperationSnapshot, CryptoTokenKitError> {
-        let ptr =
-            unsafe { ffi::token_session::ctk_token_smart_card_pin_auth_operation_json(self.raw) };
+        let ptr = checked(|error| unsafe {
+            ffi::token_session::ctk_token_smart_card_pin_auth_operation_json(self.raw, error)
+        })?;
         if ptr.is_null() {
             return Err(CryptoTokenKitError::FrameworkError(
                 "Swift bridge returned a null smart-card PIN auth operation snapshot".into(),
@@ -451,8 +462,16 @@ impl_drop_release!(TokenSmartCardPinAuthOperation);
 
 #[cfg(test)]
 mod tests {
-    use super::TokenSmartCardPinAuthOperation;
+    use super::{
+        SmartCardTokenSession, TokenAuthOperation, TokenPasswordAuthOperation, TokenSession,
+        TokenSmartCardPinAuthOperation,
+    };
     use crate::ffi;
+    use crate::private::checked;
+    use crate::private::test_support::{assert_wrong_handle, retained};
+    use crate::token::Token;
+    use crate::token_driver::TokenDriver;
+    use crate::token_keychain_contents::TokenObjectId;
 
     #[test]
     fn the_pin_never_enters_the_json_snapshot() {
@@ -461,9 +480,15 @@ mod tests {
         operation
             .set_pin_byte_offset(1)
             .expect("snapshot update keeps working");
-        let json = crate::error::take_owned_c_string(unsafe {
-            ffi::token_session::ctk_token_smart_card_pin_auth_operation_json(operation.raw)
-        });
+        let json = crate::error::take_owned_c_string(
+            checked(|error| unsafe {
+                ffi::token_session::ctk_token_smart_card_pin_auth_operation_json(
+                    operation.raw,
+                    error,
+                )
+            })
+            .expect("snapshot"),
+        );
         assert!(json.contains("pinByteOffset"), "{json}");
         assert!(!json.contains("97531"), "{json}");
         assert_eq!(
@@ -474,5 +499,47 @@ mod tests {
                 .map(|pin| pin.as_str()),
             Some("97531")
         );
+    }
+
+    #[test]
+    fn auth_operation_handles_of_another_class_are_rejected() {
+        let pin = TokenSmartCardPinAuthOperation::from_raw(TokenAuthOperation::new().into_raw());
+        assert_wrong_handle(pin.pin());
+        assert_wrong_handle(pin.set_pin(Some("1234")));
+        assert_wrong_handle(pin.pin_format());
+        assert_wrong_handle(pin.set_smart_card(None));
+
+        let password =
+            TokenPasswordAuthOperation::from_raw(TokenSmartCardPinAuthOperation::new().into_raw());
+        assert_wrong_handle(password.password());
+        assert_wrong_handle(password.set_password(Some("1234")));
+    }
+
+    #[test]
+    fn session_handles_of_another_class_are_rejected() {
+        let driver = TokenDriver::new();
+        let token =
+            Token::new(&driver, "com.example.cryptotokenkit.session-handles").expect("token");
+        let plain = SmartCardTokenSession {
+            raw: TokenSession::new(&token).expect("session").into_raw(),
+        };
+        assert_wrong_handle(plain.smart_card());
+        assert_wrong_handle(plain.get_smart_card());
+        assert_eq!(
+            plain.token_instance_id().expect("still a token session"),
+            "com.example.cryptotokenkit.session-handles"
+        );
+
+        let not_a_session = TokenSession::from_raw(retained(token.raw()));
+        assert_wrong_handle(not_a_session.token_instance_id());
+        assert_wrong_handle(not_a_session.token());
+        assert_wrong_handle(not_a_session.has_delegate());
+        assert_wrong_handle(not_a_session.clear_delegate());
+        assert_wrong_handle(not_a_session.invoke_delegate_sign_data(
+            b"payload",
+            &TokenObjectId::new("key"),
+            "com.example.base",
+            &[],
+        ));
     }
 }

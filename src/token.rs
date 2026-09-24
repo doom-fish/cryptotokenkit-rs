@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use crate::error::CryptoTokenKitError;
 use crate::ffi;
 use crate::private::{
-    decode_json, decode_optional_json, encode_json_cstring, status_result, to_cstring,
+    checked, decode_json, decode_optional_json, encode_json_cstring, status_result, to_cstring,
 };
 use crate::smart_card::SmartCard;
 use crate::token_driver::{SmartCardTokenDriver, TokenDriver};
@@ -42,14 +42,20 @@ impl Token {
     /// Creates a new wrapper around `TKToken`.
     pub fn new(driver: &TokenDriver, instance_id: &str) -> Result<Self, CryptoTokenKitError> {
         let instance_id = to_cstring(instance_id)?;
+        let mut raw = ptr::null_mut();
         let mut error_ptr = ptr::null_mut();
-        let raw = unsafe {
-            ffi::token::ctk_token_new(driver.raw(), instance_id.as_ptr(), &raw mut error_ptr)
+        let status = unsafe {
+            ffi::token::ctk_token_new(
+                driver.raw(),
+                instance_id.as_ptr(),
+                &raw mut raw,
+                &raw mut error_ptr,
+            )
         };
+        status_result(status, error_ptr)?;
         if raw.is_null() {
-            return Err(crate::error::from_swift(
-                ffi::status::FRAMEWORK_ERROR,
-                error_ptr,
+            return Err(CryptoTokenKitError::FrameworkError(
+                "Swift bridge returned a null token".into(),
             ));
         }
         Ok(Self { raw })
@@ -73,20 +79,7 @@ impl Token {
 
     /// Returns the corresponding `TKToken` value.
     pub fn configuration(&self) -> Result<TokenConfigurationSnapshot, CryptoTokenKitError> {
-        let mut error_ptr = ptr::null_mut();
-        let ptr = unsafe { ffi::token::ctk_token_configuration_json(self.raw, &raw mut error_ptr) };
-        if ptr.is_null() && !error_ptr.is_null() {
-            return Err(crate::error::from_swift(
-                ffi::status::FRAMEWORK_ERROR,
-                error_ptr,
-            ));
-        }
-        if ptr.is_null() {
-            return Err(CryptoTokenKitError::FrameworkError(
-                "Swift bridge returned a null token configuration".into(),
-            ));
-        }
-        decode_json(ptr)
+        configuration_snapshot(self.raw, "token")
     }
 
     /// Wraps the corresponding `TKToken` operation.
@@ -135,18 +128,20 @@ impl Token {
         object_id: &TokenObjectId,
     ) -> Result<TokenKeychainKey, CryptoTokenKitError> {
         let object_id = to_cstring(&object_id.0)?;
+        let mut ptr = ptr::null_mut();
         let mut error_ptr = ptr::null_mut();
-        let ptr = unsafe {
+        let status = unsafe {
             ffi::token::ctk_token_key_for_object_id_json(
                 self.raw,
                 object_id.as_ptr(),
+                &raw mut ptr,
                 &raw mut error_ptr,
             )
         };
+        status_result(status, error_ptr)?;
         if ptr.is_null() {
-            return Err(crate::error::from_swift(
-                ffi::status::FRAMEWORK_ERROR,
-                error_ptr,
+            return Err(CryptoTokenKitError::FrameworkError(
+                "Swift bridge returned a null token key".into(),
             ));
         }
         decode_json(ptr)
@@ -158,18 +153,20 @@ impl Token {
         object_id: &TokenObjectId,
     ) -> Result<TokenKeychainCertificate, CryptoTokenKitError> {
         let object_id = to_cstring(&object_id.0)?;
+        let mut ptr = ptr::null_mut();
         let mut error_ptr = ptr::null_mut();
-        let ptr = unsafe {
+        let status = unsafe {
             ffi::token::ctk_token_certificate_for_object_id_json(
                 self.raw,
                 object_id.as_ptr(),
+                &raw mut ptr,
                 &raw mut error_ptr,
             )
         };
+        status_result(status, error_ptr)?;
         if ptr.is_null() {
-            return Err(crate::error::from_swift(
-                ffi::status::FRAMEWORK_ERROR,
-                error_ptr,
+            return Err(CryptoTokenKitError::FrameworkError(
+                "Swift bridge returned a null token certificate".into(),
             ));
         }
         decode_json(ptr)
@@ -179,16 +176,16 @@ impl Token {
     pub fn keychain_contents_items(
         &self,
     ) -> Result<Option<Vec<TokenKeychainEntry>>, CryptoTokenKitError> {
+        let mut ptr = ptr::null_mut();
         let mut error_ptr = ptr::null_mut();
-        let ptr = unsafe {
-            ffi::token::ctk_token_keychain_contents_items_json(self.raw, &raw mut error_ptr)
+        let status = unsafe {
+            ffi::token::ctk_token_keychain_contents_items_json(
+                self.raw,
+                &raw mut ptr,
+                &raw mut error_ptr,
+            )
         };
-        if ptr.is_null() && !error_ptr.is_null() {
-            return Err(crate::error::from_swift(
-                ffi::status::FRAMEWORK_ERROR,
-                error_ptr,
-            ));
-        }
+        status_result(status, error_ptr)?;
         decode_optional_json(ptr)
     }
 }
@@ -205,8 +202,9 @@ impl SmartCardToken {
         let (aid_ptr, aid_len, has_aid) = aid.map_or((ptr::null(), 0, false), |bytes| {
             (bytes.as_ptr(), bytes.len(), true)
         });
+        let mut raw = ptr::null_mut();
         let mut error_ptr = ptr::null_mut();
-        let raw = unsafe {
+        let status = unsafe {
             ffi::token::ctk_smart_card_token_new(
                 smart_card.raw(),
                 aid_ptr,
@@ -214,13 +212,14 @@ impl SmartCardToken {
                 has_aid,
                 instance_id.as_ptr(),
                 driver.raw(),
+                &raw mut raw,
                 &raw mut error_ptr,
             )
         };
+        status_result(status, error_ptr)?;
         if raw.is_null() {
-            return Err(crate::error::from_swift(
-                ffi::status::FRAMEWORK_ERROR,
-                error_ptr,
+            return Err(CryptoTokenKitError::FrameworkError(
+                "Swift bridge returned a null smart-card token".into(),
             ));
         }
         Ok(Self { raw })
@@ -244,27 +243,32 @@ impl SmartCardToken {
 
     /// Returns the corresponding `TKSmartCardToken` value.
     pub fn aid(&self) -> Result<Option<Vec<u8>>, CryptoTokenKitError> {
-        let ptr = unsafe { ffi::token::ctk_smart_card_token_aid_json(self.raw) };
+        let ptr =
+            checked(|error| unsafe { ffi::token::ctk_smart_card_token_aid_json(self.raw, error) })?;
         decode_optional_json(ptr)
     }
 
     /// Returns the corresponding `TKSmartCardToken` value.
     pub fn configuration(&self) -> Result<TokenConfigurationSnapshot, CryptoTokenKitError> {
-        let mut error_ptr = ptr::null_mut();
-        let ptr = unsafe { ffi::token::ctk_token_configuration_json(self.raw, &raw mut error_ptr) };
-        if ptr.is_null() && !error_ptr.is_null() {
-            return Err(crate::error::from_swift(
-                ffi::status::FRAMEWORK_ERROR,
-                error_ptr,
-            ));
-        }
-        if ptr.is_null() {
-            return Err(CryptoTokenKitError::FrameworkError(
-                "Swift bridge returned a null smart-card token configuration".into(),
-            ));
-        }
-        decode_json(ptr)
+        configuration_snapshot(self.raw, "smart-card token")
     }
+}
+
+fn configuration_snapshot(
+    raw: *mut c_void,
+    kind: &str,
+) -> Result<TokenConfigurationSnapshot, CryptoTokenKitError> {
+    let mut ptr = ptr::null_mut();
+    let mut error_ptr = ptr::null_mut();
+    let status =
+        unsafe { ffi::token::ctk_token_configuration_json(raw, &raw mut ptr, &raw mut error_ptr) };
+    status_result(status, error_ptr)?;
+    if ptr.is_null() {
+        return Err(CryptoTokenKitError::FrameworkError(format!(
+            "Swift bridge returned a null {kind} configuration"
+        )));
+    }
+    decode_json(ptr)
 }
 
 impl Drop for Token {
