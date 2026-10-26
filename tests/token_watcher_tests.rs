@@ -15,7 +15,7 @@ fn watcher_lists_tokens_and_triggers_callbacks() -> Result<(), Box<dyn std::erro
     })?;
 
     let token_ids = watcher.token_ids()?;
-    assert!(!token_ids.is_empty());
+    assert_ne!(token_ids, [] as [std::string::String; 0]);
     assert!(!inserted.lock().unwrap().is_empty());
     assert_eq!(
         removed.lock().unwrap().as_slice(),

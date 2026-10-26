@@ -4,7 +4,7 @@ use cryptotokenkit::{SmartCardAtr, SmartCardProtocol, TlvEncoding, TlvRecord};
 fn atr_and_tlv_helpers_round_trip() {
     let atr = SmartCardAtr::parse(&[0x3B, 0x00]).expect("expected valid ATR");
     assert_eq!(atr.protocols, vec![SmartCardProtocol::T0]);
-    assert!(atr.historical_bytes.is_empty());
+    assert_eq!(atr.historical_bytes, [] as [u8; 0]);
 
     let source_bytes = [0x3B, 0x00];
     let mut index = 0;

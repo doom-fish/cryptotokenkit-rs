@@ -24,7 +24,10 @@ fn token_configuration_reflects_the_framework() -> Result<(), Box<dyn std::error
         snapshot.instance_id,
         "com.example.cryptotokenkit.token-test"
     );
-    assert!(snapshot.keychain_items.is_empty());
+    assert_eq!(
+        snapshot.keychain_items,
+        [] as [cryptotokenkit::TokenKeychainEntry; 0]
+    );
     assert_eq!(token.instance_id()?, snapshot.instance_id);
     Ok(())
 }
